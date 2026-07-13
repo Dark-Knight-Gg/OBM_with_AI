@@ -1,0 +1,837 @@
+---
+description: Stitch2Flutter workflow — Generate Flutter UI từ Stitch export (HTML + CSS YAML + optional SRS/Postman). APPLIES ONLY when user prompt contains explicit /vnpt_workflow_stitch2flutter slash command. If the prompt has NO slash command → BỎ QUA rule.
+globs:
+alwaysApply: false
+---
+
+# 🎨 VNPT Workflow — Stitch2Flutter Generator
+
+> **Variables:** This file uses `{{VARIABLE}}` tokens resolved from `_project_config.mdc`.
+> When copying to a new project: update `_project_config.mdc` only.
+>
+> **⚠️ TRIGGER ĐIỀU KIỆN** — Rule này CHỈ active khi user prompt chứa `/vnpt_workflow_stitch2flutter`.
+>
+> **⛔ ĐỘC LẬP HOÀN TOÀN** với workflow create cũ. Không sửa file nào của workflow cũ.
+
+---
+
+## 🤖 AGENT CONFIGURATION
+
+```yaml
+agents:
+  dev:
+    model: composer-2.5-fast
+    temperature: 0.5
+    # Tasks: parse Stitch export → generate Flutter UI files
+
+  review:
+    model: claude-4.6
+    temperature: 0.1
+```
+
+---
+
+## 🎯 STEP 0: KIỂM TRA TRƯỚC KHI ÁP DỤNG
+
+```python
+if re.search(r'/vnpt_workflow_stitch2flutter\b', prompt, re.IGNORECASE):
+    apply_stitch2flutter_workflow()
+else:
+    respond_normally()
+```
+
+---
+
+## 📥 CÚ PHÁP
+
+```
+/vnpt_workflow_stitch2flutter <tên_feature> \
+  --html    <path/to/export.html>           # BẮT BUỘC
+  --css     <path/to/styles.md>             # BẮT BUỘC (YAML format)
+  --srs     <path/to/SRS.md>                # OPTIONAL
+  --postman <collection_name>               # OPTIONAL
+  --output  <path/to/output/folder>         # OPTIONAL
+```
+
+> Variables: `{{FEATURES_PATH}}` (default output: `{{FEATURES_PATH}}<tên>/`)
+
+### Defaults
+
+| | Flag | Mặc định |
+|---|---|---|
+| `--output` | `{{FEATURES_PATH}}<tên_feature>/` |
+| `--srs` | `(skip)` |
+| `--postman` | `(skip)` |
+
+---
+
+## 📂 STITCH EXPORT FORMAT (INPUT)
+
+### 1. HTML file (`--html`)
+
+Là file HTML export từ **Stitch (Google Labs)**. Cấu trúc:
+- 1 file HTML duy nhất, có `<!DOCTYPE html>` + `<html class="light" lang="vi">`
+- Có `<script id="tailwind-config">` chứa `theme.extend.colors`
+- Có inline `<style>` block
+- Body chứa: `<main>`, gradient section, form/buttons/inputs
+
+### 2. CSS file (`--css`) — YAML FORMAT
+
+Yêu cầu **YAML** với 4 top-level keys:
+
+```yaml
+---
+name: <Tên Design System>
+colors:
+  surface: '#f7f9fb'
+  primary: '#005f9e'
+  ...
+typography:
+  display-lg:
+    fontFamily: Inter
+    fontSize: 48px
+    fontWeight: '800'
+    lineHeight: '1.2'
+rounded:
+  sm: 0.25rem
+  DEFAULT: 0.5rem
+  md: 0.75rem
+spacing:
+  unit: 4px
+  container-padding: 40px
+```
+
+---
+
+## 🔄 FLOW TỔNG QUAN
+
+```
+User Prompt:
+  /vnpt_workflow_stitch2flutter login_screen \
+    --html export/login.html \
+    --css export/styles.md
+
+        ↓
+[1] Validate --html + --css (bắt buộc)
+        ↓
+[2] Parse HTML (DOM tree) + CSS YAML (tokens)
+        ↓
+[3] Tạo scaffold <output>/
+        ↓
+[4] Generate files:
+    - <tên>_screen.dart
+    - widget/body_<tên>_widget.dart
+    - <tên>_mapping.md
+    - DEVELOPMENT_STATUS.md
+    - component/<tên>_service.dart  (nếu có --postman)
+    - component/<tên>_provider.dart (nếu có --postman)
+    - model/<tên>_model.dart        (nếu có --srs HOẶC --postman)
+    - route_generator.dart          (nếu có --postman — create HOẶC append case)
+        ↓
+[5] Append color tokens vào color_app.dart ({{SVG_HELPER}} chỉ thêm mới, KHÔNG sửa cũ)
+        ↓
+[5b] i18n — extract strings từ HTML → check {{I18N_GETTER}} → add missing vào JSON + AppStrings
+        ↓
+[6] Apply Hard Rules ({{SCREEN_STATE_BASE}}, {{IMPORT_CORE}}, {{BRAND}}, {{I18N_CLASS}})
+        ↓
+[7] Update dev progress → done + auto-loop review (max 3)
+        ↓
+[8]AI Review-Loop
+```
+
+---
+
+## 🔧 PARSERS — CHI TIẾT
+
+### 1. HTML Parser (DOM → Widget tree)
+
+**Quy tắc mapping HTML element → Flutter widget:**
+
+| | HTML/Tailwind class | Flutter widget |
+|---|---|
+| `<main class="flex flex-col ...">` | `Column(...)` |
+| `<div class="bg-login-gradient">` | `Container(gradient: LinearGradient(...))` |
+| `<div class="card-shadow bg-white rounded-xl">` | `Container(boxShadow: [...], borderRadius: ...)` |
+| `<h1 class="text-headline-lg">` | `Text('...', style: TextStyle(fontSize: 30, fontWeight: w700))` |
+| `<form class="flex flex-col gap-stack-md">` | `Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...])` |
+| `<input class="rounded-lg border">` | `TextField(decoration: InputDecoration(border: ...))` |
+| `<button class="btn-gradient rounded-lg">` | `ElevatedButton(...)` |
+| `<span class="material-symbols-outlined">login</span>` | `Icon(Icons.login, size: 20)` |
+| `<div class="bg-[#D1E7DD] text-[#0f5132] rounded-lg">` | `Container(color: Color(0xFFD1E7DD), borderRadius: ...)` |
+
+### 2. CSS YAML Parser (Tokens → Constants)
+
+| | Block | Output |
+|---|---|
+| `colors.*` | Append `static const Color <name> = Color(0xFF<hex>);` vào `lib/core/constants/color_app.dart` |
+| `typography.*` | **Dùng Flutter `TextStyle(...)`** inline trong code |
+| `rounded.*` | **Dùng inline `BorderRadius.circular(<value>)`** |
+| `spacing.*` | **Dùng inline `EdgeInsets.all(<value>)` / `SizedBox(height: <value>)`** |
+
+### 3. Material Symbols → Material Icons Mapper
+
+| | Stitch (Material Symbols) | Flutter Material Icons |
+|---|---|
+| `mail` | `Icons.mail_outline` |
+| `lock` | `Icons.lock_outline` |
+| `login` | `Icons.login` |
+| `check_circle` | `Icons.check_circle` |
+| `arrow_back` | `Icons.arrow_back` |
+| `search` | `Icons.search` |
+| `close` | `Icons.close` |
+| `add` | `Icons.add` |
+
+---
+
+## 🛠️ PIPELINE 7 BƯỚC
+
+### Bước 1: Validate input
+
+```bash
+if [ -z "$HTML_PATH" ]; then
+  echo "❌ --html là bắt buộc"
+  exit 1
+fi
+```
+
+### Bước 2: Parse sources
+
+**2a. Parse HTML:** Read file → extract title, main content, sections, inline styles, icons
+
+**2b. Parse CSS YAML:** Read file → extract colors, typography, rounded, spacing blocks
+
+**2c. Parse SRS (optional):** Read file → extract user stories, field tables
+
+**2d. Parse Postman (optional):** Postman MCP → extract endpoints, schemas
+
+### Bước 3: Tạo scaffold
+
+```bash
+mkdir -p <output>/component
+mkdir -p <output>/model
+mkdir -p <output>/widget
+```
+
+### Bước 4: Generate files
+
+**4a. `<tên>_screen.dart`:**
+
+> Variables: `{{SCREEN_BASE_CLASS}}`, `{{SCREEN_STATE_BASE}}`, `{{IMPORT_CORE}}`, `{{FEATURES_PATH}}`
+
+```dart
+import 'package:obm_gen_with_ai/core/';
+import 'package:obm_gen_with_ai/features/<tên>/component/<tên>_provider.dart';
+import 'package:obm_gen_with_ai/features/<tên>/component/<tên>_service.dart';
+import 'package:obm_gen_with_ai/features/<tên>/widget/body_<tên>_widget.dart';
+
+class <Tên>Screen extends {{SCREEN_BASE_CLASS}} {
+  const <Tên>Screen({Key? key}) : super(key: key);
+
+  @override
+  State<<Tên>Screen> createState() => _<Tên>ScreenState();
+}
+
+class _<Tên>ScreenState
+    extends {{SCREEN_STATE_BASE}}<Tên>Screen, <Tên>Service, <Tên>Provider> {
+  @override
+  Widget buildBody(BuildContext context) {
+    return const Body<Tên>Widget();
+  }
+}
+```
+
+> **Lưu ý:** Screen dùng generic type `{{SCREEN_STATE_BASE}}<..., S, P>`. Provider/service được resolve qua `{{SCREEN_STATE_BASE}}` — không cần truyền qua constructor.
+
+**4b. `widget/body_<tên>_widget.dart`:**
+
+```dart
+import 'package:obm_gen_with_ai/core/';
+
+class Body<Tên>Widget extends StatelessWidget {
+  const Body<Tên>Widget({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // Trigger action → context.watch<<Tên>Provider>>().xxx()
+    // Watch state  → context.watch<<Tên>Provider>>() hoặc context.select<<Tên>Provider, R>()
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // Brand title — typography dùng TextStyle() inline
+        Text('DAS', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700)),
+        // Card — spacing/radius inline
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            children: [
+              // Form fields + Submit button
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+```
+
+> **Quy tắc:**
+> - Body widget là **StatelessWidget thuần** — KHÔNG bọc `SelectorBase`/`ConsumerBase`/`ChangeNotifierProvider`.
+> - `{{CONSUMER_BASE}}` trong `buildRoot()` của `{{SCREEN_BASE_CLASS}}` đã xử lý loading/error/noData cả page.
+> - Dùng `SelectorBase`/`ConsumerBase` **CHỈ KHI** muốn loading/error riêng cho **từng thành phần** trong page (ví dụ: nút Submit có loading riêng).
+> - Body widget truy cập provider trực tiếp: `context.read<<Tên>Provider>>()` (action) hoặc `context.watch<<Tên>Provider>>()` / `context.select<<Tên>Provider, R>>()` (watch state).
+
+**4c. `<tên>_mapping.md`:** Auto-gen mapping doc (template: `workflow/templates/mapping-template.mdc`)
+
+**4d. `DEVELOPMENT_STATUS.md`:** Auto-gen status tracker
+
+**4e. Model/Service/Provider** (CHỈ khi có `--srs` HOẶC `--postman`):
+
+> Variables: `{{PROVIDER_BASE}}`, `{{SERVICE_BASE}}`, `{{STATE_TYPE}}`
+
+**4f. `route_generator.dart` — CHỈ khi có `--postman`:**
+
+> **Trigger:** có `--postman` (tức feature có service + provider). KHÔNG gen nếu chỉ có `--html` + `--css`.
+
+**4f.1 — Kiểm tra file tồn tại:**
+
+```python
+route_file = "lib/core/constants/route_generator.dart"
+file_exists = os.path.exists(route_file)
+```
+
+**4f.2 — Tên route (camelCase):**
+
+```
+<tên> = <tên>              # VD: "login" → '/login'
+RouteGenerator.<tên> = "/<tên>"
+```
+
+**4f.3 — Nếu file CHƯA tồn tại → tạo mới toàn bộ:**
+
+```dart
+// file: lib/core/constants/route_generator.dart
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:obm_gen_with_ai/core/base/services/dio_option.dart';
+import 'package:obm_gen_with_ai/features/<tên>/<tên>_screen.dart';
+import 'package:obm_gen_with_ai/features/<tên>/component/<tên>_provider.dart';
+import 'package:obm_gen_with_ai/features/<tên>/component/<tên>_service.dart';
+
+class RouteGenerator {
+  RouteGenerator._();
+
+  static const String splash = '/splash';
+  static const String login = '/login';
+  static const String home = '/home';
+  static const String <tên> = '/<tên>';
+
+  static Route<dynamic> generateRoute(RouteSettings settings) {
+    switch (settings.name) {
+      case splash:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const <Tên>Screen(),
+        );
+      case login:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const <Tên>Screen(),
+        );
+      case home:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const <Tên>Screen(),
+        );
+      case <tên>:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => MultiProvider(
+            providers: [
+              ChangeNotifierProvider<<Tên>Provider>(
+                create: (_) => <Tên>Provider(
+                  <Tên>Service(DioOption().createDio()),
+                ),
+              ),
+            ],
+            child: const <Tên>Screen(),
+          ),
+        );
+      default:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => Scaffold(
+            body: Center(
+              child: Text('Route not found: ${settings.name}'),
+            ),
+          ),
+        );
+    }
+  }
+}
+```
+
+**4f.4 — Nếu file ĐÃ tồn tại → append case MỚI, KHÔNG overwrite:**
+
+```python
+# Đọc file hiện có
+existing = Read(path=route_file)
+
+# Kiểm tra case đã tồn tại chưa
+if f"case <tên>:" in existing:
+    print(f"⚠️ case <tên> đã có trong route_generator.dart — skip")
+else:
+    # Tìm vị trí chèn: trước 'default:'
+    # Chèn case mới vào cuối switch (trước default)
+    insert_before = existing.rfind('default:')
+    new_case = f"""      case <tên>:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => MultiProvider(
+            providers: [
+              ChangeNotifierProvider<<Tên>Provider>(
+                create: (_) => <Tên>Provider(
+                  <Tên>Service(DioOption().createDio()),
+                ),
+              ),
+            ],
+            child: const <Tên>Screen(),
+          ),
+        );
+      """
+
+    # Chèn import tương ứng
+    # Chèn static const String
+    # Chèn case vào switch
+    Write(route_file, ...)
+```
+
+**4f.5 — Import cần thiết:**
+
+| Import | Khi nào |
+|---|---|
+| `package:provider/provider.dart` | Luôn cần |
+| `package:obm_gen_with_ai/core/base/services/dio_option.dart` | Luôn cần |
+| `package:obm_gen_with_ai/features/<tên>/<tên>_screen.dart` | Luôn cần |
+| `package:obm_gen_with_ai/features/<tên>/component/<tên>_provider.dart` | Luôn cần |
+| `package:obm_gen_with_ai/features/<tên>/component/<tên>_service.dart` | Luôn cần |
+
+**4f.6 — Route KHÔNG có `--postman`:**
+
+Route mà chỉ có `--html` + `--css` (không có service/provider) → bọc đơn giản, không `MultiProvider`:
+
+```dart
+case <tên>:
+  return MaterialPageRoute(
+    settings: settings,
+    builder: (_) => const <Tên>Screen(),
+  );
+```
+
+> **Tóm tắt logic:**
+> - `--postman` → `MultiProvider` + `ChangeNotifierProvider` + `const <Tên>Screen()`
+> - Không `--postman` → `const <Tên>Screen()` không bọc gì
+
+### Bước 5: Append color tokens
+
+> **QUY TẮC RẤT QUAN TRỌNG:**
+> - CHỈ thêm token MỚI (skip nếu tên đã có)
+> - KHÔNG sửa phần nào khác của file
+> - Vị trí: tìm dòng cuối cùng `static const Color` rồi insert sau
+
+```python
+existing = Read(path="lib/core/constants/color_app.dart")
+existing_names = re.findall(r'static const Color (\w+)', existing)
+
+new_tokens = []
+for css_name, hex in css_colors.items():
+    dart_name = css_to_dart_name(css_name)
+    if dart_name in existing_names:
+        continue  # SKIP — đã có
+    new_tokens.append(f'  static const Color {dart_name} = Color(0xFF{hex});')
+```
+
+### Bước 5b: i18n — Extract, check, add missing, dùng `{{I18N_GETTER}}`
+
+**QUY TẮC BẮT BUỘC:** Mọi user-facing string từ HTML → `AppStrings.*`. KHÔNG hardcoded string tiếng Việt trong generated code.
+
+**5b.1 — Extract tất cả visible text từ HTML** (loại trừ: tags, attributes, URLs, IDs, numbers).
+
+**5b.2 — Check key tồn tại ở 2 lớp:**
+
+```python
+# Lớp 1: getter đã khai báo trong app_strings.dart
+app_strings = Read(path="lib/core/constants/app_strings.dart")
+existing_in_code = re.findall(r"static String get (\w+)", app_strings)
+# → ['coHoiKinhDoanh', 'dashboard', 'khachHang', ...]
+
+# Lớp 2: key trong 4 file JSON
+existing_in_json = set()
+for lang in ['vi', 'vi-VN', 'en', 'en-US']:
+    json_data = ReadJson(f"lib/assets/translations/{lang}.json")
+    existing_in_json.update(json_data.keys())
+```
+
+**5b.3 — Quyết định cho từng string:**
+
+```python
+def resolve_string_key(vi_text):
+    key = normalise_key(vi_text)  # "Cơ hội kinh doanh" → "coHoiKinhDoanh"
+
+    if key in existing_in_code:
+        return f"AppStrings.{key}", "reuse"          # ✅ đã có code
+    if key in existing_in_json:
+        return f"AppStrings.{key}", "add_getter"     # ⚠️ có JSON, thêm getter
+    return f"AppStrings.{key}", "create_new"          # 🆕 hoàn toàn mới
+
+def normalise_key(text):
+    # 1. Loại dấu tiếng Việt: "Cơ hội kinh doanh" → "Co hoi kinh doanh"
+    # 2. Loại khoảng trắng thừa
+    # 3. camelCase: "Co hoi kinh doanh" → "coHoiKinhDoanh"
+    return to_camel_case(remove_diacritics(text))
+```
+
+**5b.4 — Thêm vào JSON + AppStrings (CHỉ khi `create_new` hoặc `add_getter`):**
+
+```python
+for key, action in resolved_keys:
+    if action == "reuse":
+        continue  # ✅ không làm gì
+
+    # Thêm vào 4 JSON
+    for lang in ['vi', 'vi-VN']:
+        json_data = ReadJson(f"lib/assets/translations/{lang}.json")
+        if key not in json_data:
+            json_data[key] = original_vi_text  # giữ nguyên tiếng Việt
+
+    for lang in ['en', 'en-US']:
+        json_data = ReadJson(f"lib/assets/translations/{lang}.json")
+        if key not in json_data:
+            json_data[key] = english_translation_map[key]  # dịch sang tiếng Anh
+
+    # Thêm getter vào app_strings.dart
+    append_line(
+        "lib/core/constants/app_strings.dart",
+        f"  static String get {key} => '{key}'.tr();"
+    )
+```
+
+**5b.5 — Generated code:**
+
+```dart
+// SAI — hardcoded
+Text('Cơ hội kinh doanh')
+Text('Khách hàng')
+
+// ĐÚNG — AppStrings
+Text(AppStrings.coHoiKinhDoanh)
+Text(AppStrings.khachHang)
+```
+
+**5b.6 — Reference map (thường gặp):**
+
+| | HTML text | Key | Ghi chú |
+|---|---|---|
+| `Cơ hội kinh doanh` | `coHoiKinhDoanh` | |
+| `Khách hàng` | `khachHang` | |
+| `Tiến độ` | `tienDo` | |
+| `Chỉnh sửa` | `chinhSua` | |
+| `Xóa` | `xoa` | |
+| `Lọc kết quả` | `locKetQua` | |
+| `Làm mới` | `lamMoi` | |
+| `Bộ lọc tìm kiếm` | `boLocTimKiem` | |
+| `Trạng thái` | `trangThai` | |
+| `Tất cả` | `tatCa` | |
+| `Xác nhận` | `xacNhan` | |
+
+**5b.7 — Provider strings (BẮT BUỘC — ÁP DỤNG CHO GENERATED PROVIDER):**
+
+Khi generate provider file (khi có `--srs` HOẶC `--postman`), MỌI string trong code phải dùng `AppStrings.*`. KHÔNG hardcoded string tiếng Việt trong provider.
+
+**5b.7.1 — Validate provider trước khi write:**
+
+```python
+generated_provider = Read(path="<output>/component/<tên>_provider.dart")
+
+# Pattern bắt: string literal gán cho display field (error message, toast, dialog)
+hardcoded_strings = re.findall(
+    r"(emailError|passwordError|errorMessage|showToast|showDialog)\s*\(\s*['\"]([^'\"]+)['\"]",
+    generated_provider
+)
+
+suspicious = []
+for context, s in hardcoded_strings:
+    if is_camel_case_key(s) or is_email(s) or is_url(s) or is_regex(s):
+        continue
+    if s in existing_in_code:
+        continue
+    suspicious.append(s)
+
+if suspicious:
+    for s in suspicious:
+        key = normalise_key(s)
+        add_i18n_entry(key, s)
+```
+
+**5b.7.2 — Common provider string patterns:**
+
+| | Trong code | Thành |
+|---|-----------|-------|
+| `emailError = 'Vui lòng nhập Email'` | `emailError = AppStrings.vuiLongNhapEmail` |
+| `emailError = 'Email không đúng định dạng'` | `emailError = AppStrings.emailKhongDungDinhDang` |
+| `passwordError = 'Vui lòng nhập mật khẩu'` | `passwordError = AppStrings.vuiLongNhapMatKhau` |
+| `showToast('Email hoặc mật khẩu không chính xác', ...)` | `showToast(AppStrings.emailHoacMatKhauKhongChinhXac, ...)` |
+| `showToast('Không thể kết nối tới máy chủ', ...)` | `showToast(AppStrings.khongTheKetNoiMauChu, ...)` |
+| `showToast('Đăng nhập thành công', ...)` | `showToast(AppStrings.dangNhapThanhCong, ...)` |
+
+**5b.7.3 — Generated provider code (ĐÚNG):**
+
+```dart
+// SAI — hardcoded
+emailError = 'Vui lòng nhập Email';
+showToast('Email hoặc mật khẩu không chính xác', type: ToastType.error);
+
+// ĐÚNG — AppStrings
+emailError = AppStrings.vuiLongNhapEmail;
+showToast(AppStrings.emailHoacMatKhauKhongChinhXac, type: ToastType.error);
+```
+
+**5b.7.4 — Trường hợp đặc biệt: API error message:**
+
+```dart
+// API trả về message từ server → dùng trực tiếp (OK)
+showToast(e.message ?? AppStrings.khongTheKetNoiMauChu, type: ToastType.error);
+// ✅ e.message là từ server, OK
+// ✅ Fallback PHẢI là AppStrings.* — KHÔNG hardcoded string
+```
+
+**5b.7.5 — Khi nào GIỮ nguyên string (KHÔNG cần AppStrings):**
+
+- String là key/object property (VD: `'password'`, `'email'`)
+- String là enum value
+- String là regex pattern
+- String là path/URL
+- String là numeric identifier
+
+```dart
+// ✅ GIỮ NGUYÊN — không phải display string
+final Map<String, dynamic> data = {'username': email, 'password': password};
+final result = await client.post('https://api.example.com/auth');
+enum ApiStatus { pending, approved, rejected }
+
+// ❌ CẦN AppStrings — display text
+emailError = AppStrings.vuiLongNhapEmail;
+```
+
+**5b.7.6 — Tự động thêm i18n keys khi detect hardcoded:**
+
+```python
+for s in suspicious:
+    key = normalise_key(s)
+    for lang in ['vi', 'vi-VN', 'en', 'en-US']:
+        json_data[f"lib/assets/translations/{lang}.json"][key] = (
+            s if lang in ['vi', 'vi-VN'] else translate(s)
+        )
+    append_to_app_strings(f"  static String get {key} => '{key}'.tr();")
+```
+
+### Bước 6: Apply Hard Rules
+
+### Bước 6: Apply Hard Rules
+
+| | Rule | Check | Variable |
+|---|---|---|
+| **{{SCREEN_STATE_BASE}}** | `<tên>_screen.dart` dùng `{{SCREEN_BASE_CLASS}}` | `{{SCREEN_STATE_BASE}}` |
+| **Import** | `import 'package:obm_gen_with_ai/core/';` | `{{IMPORT_CORE}}` |
+| **{{BRAND}}** | Dùng `{{BRAND}}` cho color tokens | `{{BRAND}}` |
+| **{{I18N_CLASS}}** | String đa ngôn ngữ dùng `{{I18N_GETTER}}` | `{{I18N_CLASS}}` |
+| **AppStrings trong provider** | KHÔNG string tiếng Việt hardcoded trong `<tên>_provider.dart` | `{{I18N_GETTER}}` |
+| **Typography Flutter** | `TextStyle(fontSize:, fontWeight:, height:)` inline | — |
+| **Spacing/Radius inline** | `BorderRadius.circular(8)`, `EdgeInsets.all(24)` inline | — |
+| **const constructor** | StatelessWidget có `const` | — |
+| **mounted check** | Sau `await`, check `mounted` | — |
+| **AppStrings trong provider** | KHÔNG string tiếng Việt trong `.dart` files | `{{I18N_GETTER}}` |
+
+### Bước 7: Update status
+
+```python
+./vnpt_workflow update <tên> dev done
+# → Auto-loop review (max 3 vòng)
+```
+
+<!-- ### Bước 8: 🔁 TỰ ĐỘNG chạy REVIEW (KHÔNG chờ user gõ)
+
+**Bắt buộc theo MAX_ITERATIONS = 3:**
+
+```python
+MAX_ITERATIONS = 3
+iteration = 0
+has_bug = True
+
+while has_bug and iteration < MAX_ITERATIONS:
+    iteration += 1
+
+    # REVIEW
+    ./vnpt_workflow update <tên> review progress
+    check code theo review-criteria.mdc
+
+    if NO_BUG:
+        ./vnpt_workflow update <tên> review no_bug
+        ./vnpt_workflow update <tên> review done
+        break  # END
+    else:
+        # FIX
+        ./vnpt_workflow update <tên> review failed
+        ./vnpt_workflow update <tên> fix progress
+        fix bugs trong code
+        ./vnpt_workflow update <tên> fix done
+        ./vnpt_workflow update <tên> review pending  # RESET
+        continue
+
+if iteration >= MAX_ITERATIONS and has_bug:
+    print("⚠️ Sau 3 vòng review-fix vẫn còn bug. Cần user hỗ trợ.")
+```
+-->
+
+<!-- Review + Fix thử nghiệm -->
+### Bước 8: AI Review-Loop (Tự động, KHÔNG chờ user gõ)
+
+**Trigger:** Sau khi dev done, Agent phải TỰ ĐỘNG chạy review loop.
+
+**MAX_ITERATIONS = 3**
+
+#### Loop chính
+
+```python
+iteration = 0
+has_bug = True
+
+while has_bug and iteration < MAX_ITERATIONS:
+    iteration += 1
+    print(f"🔍 Review iteration {iteration}/{MAX_ITERATIONS}")
+
+    # ── 8a. Update status → review progress ────────────────
+    ./vnpt_workflow update <tên> review progress
+
+    # ── 8b. Chạy auto_review.sh ───────────────────────────
+    script_result = shell(
+        ".git_hooks/auto_review.sh <feature_dir> <feature_name>",
+        working_directory=PROJECT_ROOT
+    )
+    script_pass = (script_result.exit_code == 0)
+
+    # ── 8c. Đọc report + phân tích bugs ───────────────────
+    report_path = glob.glob("<feature_dir>/.vnpt_cache/report_*.md")[-1]
+    report = Read(report_path)
+    bugs_script = parse_bugs_from_report(report)
+    bugs_ai = ai_semantic_review(<feature_dir>)   # 8d
+
+    all_bugs = bugs_script + bugs_ai
+
+    # ── 8e. Fix bugs ────────────────────────────────────────
+    if all_bugs:
+        ./vnpt_workflow update <tên> review failed
+        ./vnpt_workflow update <tên> fix progress
+
+        for bug in all_bugs:
+            apply_fix(bug)   # xem bảng fix bên dưới
+
+        ./vnpt_workflow update <tên> fix done
+
+    # ── 8f. Verify bằng dart analyze ─────────────────────
+    verify = shell("dart analyze <feature_dir>", ...)
+    if verify.exit_code != 0:
+        for error in verify.errors:
+            apply_fix(error)
+
+    # ── 8g. Confirm bằng auto_review.sh lại ─────────────
+    confirm_result = shell(
+        ".git_hooks/auto_review.sh <feature_dir> <feature_name>",
+        working_directory=PROJECT_ROOT
+    )
+    script_pass = (confirm_result.exit_code == 0)
+
+    if script_pass and len(bugs_ai) == 0:
+        has_bug = False
+        ./vnpt_workflow update <tên> review no_bug
+        ./vnpt_workflow update <tên> review done
+        print("✅ Review PASSED")
+        break
+    else:
+        ./vnpt_workflow update <tên> review pending
+        continue
+
+if iteration >= MAX_ITERATIONS and has_bug:
+    print("⚠️ Sau 3 vòng vẫn còn bug. Cần user hỗ trợ.")
+    ./vnpt_workflow update <tên> review blocked
+```
+
+---
+
+## ⚠️ ERROR HANDLING
+
+| | Lỗi | Xử lý |
+|---|---|
+| HTML file không tồn tại | STOP, báo "File not found" |
+| CSS file không tồn tại | STOP, báo "File not found" |
+| CSS thiếu block | WARN, dùng placeholder |
+| Color name đã có | SKIP, không overwrite |
+| Tất cả colors đã có | KHÔNG modify color_app.dart |
+| Stitch icon không map được | `Icons.help_outline` + `// TODO: map icon "xxx"` |
+| i18n key đã có trong code | SKIP, dùng key đó |
+| i18n key đã có trong JSON | Thêm getter, không duplicate JSON |
+
+---
+
+## 📋 CHECKLIST SAU KHI GEN
+
+- [ ] `<tên>_screen.dart` dùng `{{SCREEN_BASE_CLASS}}` (KHÔNG `Scaffold`)
+- [ ] Screen dùng constructor inject cho service/provider (KHÔNG generic type)
+- [ ] Import `package:obm_gen_with_ai/core/`
+- [ ] HTML sections được render đúng
+- [ ] Material Symbols icons được map
+- [ ] Color tokens append vào `lib/core/constants/color_app.dart` (CHỉ thêm mới)
+- [ ] Typography dùng Flutter `TextStyle(...)` inline
+- [ ] Spacing/Radius inline trong code
+- [ ] i18n — strings từ HTML → check AppStrings + JSON → add missing → dùng `{{I18N_GETTER}}`
+- [ ] KHÔNG hardcoded strings (dùng `{{I18N_GETTER}}`)
+- [ ] KHÔNG hardcoded colors (dùng `{{BRAND}}` + color tokens)
+- [ ] **Body widget là StatelessWidget thuần, KHÔNG bọc `SelectorBase`/`ConsumerBase`/`ChangeNotifierProvider`**
+- [ ] **Dùng `context.read<>()` / `context.watch<>()` / `context.select<>()` để truy cập provider trong body**
+- [ ] **`SelectorBase`/`ConsumerBase` CHỈ dùng khi cần loading/error riêng cho từng thành phần**
+- [ ] **route_generator.dart có `MultiProvider` cho route có `--postman`**
+- [ ] **route_generator.dart không duplicate case khi chạy lại**
+- [ ] Auto-loop review (max 3 vòng)
+
+---
+
+## 🔑 CRITICAL RULES
+
+1. **Slash command = lệnh thực thi** → làm ngay, KHÔNG hỏi
+2. **ĐỘC LẬP với workflow create cũ** — KHÔNG sửa `vnpt-workflow.mdc`, CLI, hooks
+3. **KHÔNG sửa code cũ trong `color_app.dart`** — CHỈ append token mới
+4. **Typography = Flutter `TextStyle(...)`** inline
+5. **Spacing/Radius = inline numbers** trong code
+6. **i18n — check 2 lớp (AppStrings + JSON) trước khi tạo mới** — reuse nếu có, add getter nếu có JSON, create_new chỉ khi hoàn toàn mới
+7. **Auto-loop review** sau dev done (max 3 vòng)
+8. **route_generator.dart** — create mới nếu chưa có, append case nếu đã có. KHÔNG overwrite file cũ.
+
+---
+
+## 🆚 SO SÁNH VỚI WORKFLOW CREATE CŨ
+
+| | Aspect | `/vnpt_workflow_create` | `/vnpt_workflow_stitch2flutter` |
+|---|---|---|
+| Input | SRS + Figma + Postman | Stitch HTML + CSS YAML + (optional SRS/Postman) |
+| Design source | Figma MCP | Stitch export file |
+| Color tokens | Append ColorApp.* | Append ColorApp.* (CHỉ thêm mới) |
+| Typography | `{{TEXT_STYLE_CLASS}}.*` | Flutter `TextStyle(...)` inline |
+| Spacing/Radius | spacing scale | Inline numbers |
+| i18n | SRS source strings | Extract from HTML → check → add missing |
+
+---
+
+*`alwaysApply: false` — chỉ attach khi prompt chứa `/vnpt_workflow_stitch2flutter`.*

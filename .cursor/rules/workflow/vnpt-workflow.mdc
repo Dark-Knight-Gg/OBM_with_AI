@@ -1,0 +1,444 @@
+---
+description: VNPT Workflow slash command handler. APPLIES ONLY when user's prompt contains an explicit /vnpt_workflow_* slash command. If the prompt has NO slash command → BỎ QUA rule.
+globs:
+alwaysApply: false
+---
+
+# 🚀 VNPT Workflow Slash Command Handler
+
+> **Variables:** This file uses `{{VARIABLE}}` tokens resolved from `_project_config.mdc`.
+> When copying to a new project: update `_project_config.mdc` only.
+>
+> **⚠️ TRIGGER ĐIỀU KIỆN** — Rule này CHỈ active khi user prompt có `/vnpt_workflow_*`.
+
+---
+
+## 🤖 AGENT CONFIGURATION (Model per Stage)
+
+```yaml
+agents:
+  dev:
+    model: composer-2.5-fast
+    temperature: 0.5
+
+  review:
+    model: claude-4.6
+    temperature: 0.1
+
+  fix:
+    model: claude-4.6
+    temperature: 0.2
+```
+
+---
+
+## 🎯 STEP 0: KIỂM TRA TRƯỚC KHI ÁP DỤNG
+
+```python
+if re.search(r'/vnpt_workflow_(create|update|status|list|review|fix|help)\b', prompt, re.IGNORECASE):
+    apply_workflow()
+else:
+    respond_normally()
+```
+
+---
+
+## ⛔ HARD RULES (BẮT BUỘC — KHÔNG ĐƯỢC VI PHẠM)
+
+> Variables: `{{SCREEN_BASE_CLASS}}`, `{{SCREEN_STATE_BASE}}`, `{{PROVIDER_BASE}}`, `{{CONSUMER_BASE}}`, `{{BRAND}}`, `{{I18N_CLASS}}`, `{{STATE_TYPE}}`, `{{M_SHOW_DIALOG}}`, `{{M_SHOW_TOAST}}`, `{{M_SHOW_LOADING}}`.
+
+### Rule 1: LUÔN dùng `{{SCREEN_STATE_BASE}}`, KHÔNG dùng `Scaffold` trực tiếp
+
+```dart
+// ❌ SAI — KHÔNG dùng Scaffold
+return Scaffold(
+  backgroundColor: ColorApp.backgroundDefault,
+  appBar: AppBar(
+    title: Text({{I18N_CLASS}}.title),
+  ),
+  body: ProgressHUD(
+    child: {{CONSUMER_BASE}}<XxxService, XxxProvider>(...),
+  ),
+);
+
+// ✅ ĐÚNG — {{SCREEN_BASE_CLASS}} wrap sẵn ProgressHUD + AppBar + SafeArea
+class XxxScreen extends {{SCREEN_BASE_CLASS}} {
+  const XxxScreen({super.key});
+  @override
+  State<XxxScreen> createState() => _XxxScreenState();
+}
+
+class _XxxScreenState
+    extends {{SCREEN_STATE_BASE}}<XxxScreen, XxxService, XxxProvider> {
+  @override
+  Widget buildBody(BuildContext context) {
+    return {{CONSUMER_BASE}}<XxxService, XxxProvider>(...);
+  }
+}
+```
+
+`{{SCREEN_STATE_BASE}}` handles:
+- `initState()` → `{{INIT_EVENT_LISTENER}}` (wires eventStream) + `Connectivity` listener.
+- `dispose()` → cancels subscription.
+- `build()` → `buildRoot(context)` → `{{CONSUMER_BASE}}` (auto-switches on `currentState`).
+
+### Rule 2: Body Widget KHÔNG chứa `Scaffold` / `AppBar` / `ProgressHUD`
+
+```dart
+// ❌ SAI — Body bị bọc lại ProgressHUD/AppBar ({{SCREEN_STATE_BASE}} đã có)
+class BodyXxxWidget extends StatefulWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(...),       // ❌
+      body: ProgressHUD(          // ❌
+        child: {{CONSUMER_BASE}}<XxxService, XxxProvider>(...),
+      ),
+    );
+  }
+}
+
+// ✅ ĐÚNG — Body chỉ chứa content
+class BodyXxxWidget extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return {{CONSUMER_BASE}}<XxxService, XxxProvider>(
+      onRepositorySuccess: (repo) => _buildContent(repo as XxxProvider),
+    );
+  }
+}
+```
+
+### Rule 3: AppBar config đặt vào `{{SCREEN_BASE_CLASS}}`, KHÔNG custom
+
+|| Mục đích | Param của `{{SCREEN_BASE_CLASS}}` |
+|---|---|
+
+### Rule 4: Enforce trong review-criteria
+
+```bash
+if grep -q "return Scaffold(" "$screen_file"; then
+  echo "❌ FAIL: Screen dùng Scaffold trực tiếp"
+  return 1
+fi
+```
+
+### Rule 5: Import tối ưu — 1 dòng duy nhất cho core
+
+> Variables: `{{IMPORT_CORE}}`
+
+```dart
+// ❌ SAI — Import trực tiếp file con
+import 'package:obm_gen_with_ai/core/components/core_button.dart';
+import 'package:obm_gen_with_ai/core/constants/color_app.dart';
+import 'package:obm_gen_with_ai/core/base/base_provider.dart';
+
+// ✅ ĐÚNG — Import qua core barrel
+import 'package:obm_gen_with_ai/core/';
+```
+
+### Rule 6: Provider KHÔNG declare lại `{{STATE_TYPE}}` field
+
+> Variables: `{{PROVIDER_BASE}}`, `{{STATE_TYPE}}`, `{{M_SHOW_LOADING}}`, `{{M_SHOW_LOADED}}`, `{{M_SHOW_ERROR}}`, `{{M_SHOW_NO_DATA}}`
+
+```dart
+// ❌ SAI — Trùng với base đã có
+class XxxProvider extends {{PROVIDER_BASE}}<XxxService> {
+  {{STATE_TYPE}} status = {{STATE_TYPE}}.none;  // ❌ trùng
+}
+
+// ✅ ĐÚNG — Dùng helper của base, không cần declare field
+class XxxProvider extends {{PROVIDER_BASE}}<XxxService> {
+  List<XxxModel> items = const [];
+
+  {{ASYNC_METHOD}} fetch() async {
+    {{M_SHOW_LOADING}};
+    try {
+      final res = await service.getItems();
+      items = res.data ?? const [];
+      items.isEmpty ? {{M_SHOW_NO_DATA}} : {{M_SHOW_LOADED}};
+    } on {{DIO_EXCEPTION}} catch (e) {
+      errorMessage = e.message;
+      {{M_SHOW_ERROR}};
+    } catch (e) {
+      errorMessage = e.toString();
+      {{M_SHOW_ERROR}};
+    }
+  }
+}
+```
+
+---
+
+## 🔄 STATE MACHINE (FLOW MỚI — BẮT BUỘC TUÂN THỦ)
+
+```
+DEV
+Pending
+  ↓
+In Progress
+  ↓
+Done
+  ↓
+Review
+
+REVIEW
+Pending
+  ↓
+In Progress
+  ↓
+Review Result
+  │
+  ├─ No Bug ──→ Done ✅ (END)
+  │
+  └─ Bug Found ──→ Failed ──→ FIX
+
+FIX
+Pending
+  ↓
+In Progress
+  ↓
+Done
+  ↓
+Review.   ← loop về REVIEW.Pending
+```
+
+### BẢNG TRANSITIONS (không được skip)
+
+|| Stage | Từ | Sang | Khi nào |
+|---|---|---|---|
+| **dev** | `pending` | `progress` | Bắt đầu code |
+| **dev** | `progress` | `done` | Code xong → chuyển review |
+| **review** | `pending` | `progress` | Bắt đầu review |
+| **review** | `progress` | `no_bug` | ✅ Review pass |
+| **review** | `no_bug` | `done` | ✅ Feature hoàn thành (END) |
+| **review** | `progress` | `failed` | ❌ Có bug → mở fix |
+| **fix** | `pending` | `progress` | Bắt đầu fix |
+| **fix** | `progress` | `done` | Fix xong → **BẮT BUỘC loop về review** |
+| **review** | `failed` | `pending` | (reset) Sau khi fix done |
+
+### 🚫 CẤM
+- ❌ `dev pending → done` (phải qua progress)
+- ❌ `review pending → no_bug` (phải review thực sự)
+- ❌ `fix pending → done` (phải qua progress)
+- ❌ `fix done` mà KHÔNG quay lại review
+
+---
+
+## 📄 2 FILE QUAN TRỌNG (THAM CHIẾU NHANH)
+
+### File 1: `<tên>_mapping.md`
+
+**Vị trí:** `{{FEATURES_PATH}}<tên>/<tên>_mapping.md`
+
+### File 2: `DEVELOPMENT_STATUS.md`
+
+**Vị trí:** `{{FEATURES_PATH}}<tên>/DEVELOPMENT_STATUS.md`
+
+---
+
+## 🛠️ CÁCH THỰC THI (CLI v2.0 — TỰ SỬA FILE)
+
+### Bước 1: Chạy CLI update
+
+```bash
+./.git_hooks/vnpt_workflow update <tên> <stage> <status> "<note>"
+```
+
+### Bước 2: Verify
+
+```bash
+./.git_hooks/vnpt_workflow status <tên>
+./.git_hooks/vnpt_workflow list
+```
+
+---
+
+## 📋 WORKFLOW 1: `/vnpt_workflow_create <tên> [--srs <file>] [--figma <url>] [--postman <collection>]`
+
+### Bước A: CLI create scaffold
+
+```bash
+./.git_hooks/vnpt_workflow create <tên> \
+  --srs SRS_<Feature>.md \
+  --figma "https://figma.com/design/...?node-id=..." \
+  --postman <Postman_Collection_Name>
+```
+
+**CLI sẽ TỰ ĐỘNG tạo:**
+```
+{{FEATURES_PATH}}<tên>/
+├── <tên>_screen.dart
+├── <tên>_mapping.md
+├── DEVELOPMENT_STATUS.md
+├── component/
+│   ├── <tên>_provider.dart
+│   └── <tên>_service.dart
+├── model/
+│   └── <tên>_model.dart
+└── widget/
+    └── body_<tên>_widget.dart
+```
+
+### Bước B: Đọc 3 nguồn context
+1. Đọc `.vnpt_cache/sources.json`
+2. Đọc SRS file
+3. Đọc `<tên>_mapping.md` vừa CLI tạo
+4. Figma MCP: `get_design_context`
+5. Postman MCP: `searchPostmanElements` → `getCollection`
+
+### Bước C: Tổng hợp 3 nguồn → Điền mapping doc + Code 5 files
+
+**Tiêu chuẩn áp dụng khi code (sử dụng biến từ `_project_config.mdc`):**
+- `{{BRAND}}` thay vì hex
+- `{{TEXT_STYLE_CLASS}}.*` + `{{I18N_GETTER}}` thay vì hardcoded strings
+- `{{PROVIDER_BASE}}` thay vì `BaseRepository`
+- `{{CONSUMER_BASE}}` thay vì `SelectorBase` (auto-switches on state)
+- `{{SCREEN_STATE_BASE}}` thay vì `Scaffold`
+
+### Bước D: Update dev progress → done
+```bash
+./.git_hooks/vnpt_workflow update <tên> dev done "Code xong"
+```
+
+### Bước E: 🔁 TỰ ĐỘNG chạy REVIEW (KHÔNG chờ user gõ)
+
+**Bắt buộc theo MAX_ITERATIONS = 3:**
+
+```python
+MAX_ITERATIONS = 3
+iteration = 0
+has_bug = True
+
+while has_bug and iteration < MAX_ITERATIONS:
+    iteration += 1
+
+    # REVIEW
+    ./vnpt_workflow update <tên> review progress
+    check code theo review-criteria.mdc
+
+    if NO_BUG:
+        ./vnpt_workflow update <tên> review no_bug
+        ./vnpt_workflow update <tên> review done
+        break  # END
+    else:
+        # FIX
+        ./vnpt_workflow update <tên> review failed
+        ./vnpt_workflow update <tên> fix progress
+        fix bugs trong code
+        ./vnpt_workflow update <tên> fix done
+        ./vnpt_workflow update <tên> review pending  # RESET
+        continue
+
+if iteration >= MAX_ITERATIONS and has_bug:
+    print("⚠️ Sau 3 vòng review-fix vẫn còn bug. Cần user hỗ trợ.")
+```
+
+---
+
+## 📋 WORKFLOW 2: `/vnpt_workflow_review <tên>`
+
+### Bước A: Mark review progress
+```bash
+./.git_hooks/vnpt_workflow update <tên> review progress "Đang review"
+```
+
+### Bước B: Đọc code + check
+1. Đọc tất cả file trong `{{FEATURES_PATH}}<tên>/`
+2. Check theo `review/review-criteria.mdc`
+3. Tìm bugs/issues
+
+### Bước C: Phân nhánh kết quả review
+
+**Case 1: KHÔNG có bug**
+```bash
+./vnpt_workflow update <tên> review no_bug "Clean code"
+./vnpt_workflow update <tên> review done "Feature hoàn thành"
+```
+
+**Case 2: CÓ bug**
+```bash
+./vnpt_workflow update <tên> review failed "Tìm thấy N bugs"
+./vnpt_workflow update <tên> fix progress "Bắt đầu fix"
+```
+
+---
+
+## 📋 WORKFLOW 3: `/vnpt_workflow_fix <tên>`
+
+### Bước A: Verify fix đang ở progress
+```bash
+./vnpt_workflow update <tên> fix progress "Fixing bugs"
+```
+
+### Bước B: Đọc bugs từ DEVELOPMENT_STATUS.md
+
+### Bước C: Fix từng bug
+
+### Bước D: Mark fix done
+```bash
+./vnpt_workflow update <tên> fix done "Đã fix N bugs"
+```
+
+### Bước E: 🔁 BẮT BUỘC LOOP VỀ REVIEW
+```bash
+./vnpt_workflow update <tên> review pending "Reset để review lại"
+```
+
+**⛔ KHÔNG BAO GIỜ** tự mark `no_bug` sau fix. Phải review lại từ đầu.
+
+---
+
+## 📋 WORKFLOW 4-7: update / status / list / help
+
+```bash
+./vnpt_workflow update <tên> <stage> <status> "<note>"
+./vnpt_workflow status [tên]
+./vnpt_workflow list
+./vnpt_workflow help
+```
+
+---
+
+## 🔑 CRITICAL RULES
+
+1. **Slash command = lệnh thực thi** → làm ngay, KHÔNG hỏi
+2. **TUÂN THỦ state machine** — KHÔNG skip status
+3. **Review khi pass**: `progress → no_bug → done` (HAI bước)
+4. **Fix BẮT BUỘC loop về review** — KHÔNG tự mark no_bug
+5. **MỖI update = CLI + sửa file DEVELOPMENT_STATUS.md thực tế**
+6. **Append Changelog** mỗi lần update
+7. **🔁 TỰ ĐỘNG loop review → fix sau dev done** (max 3 vòng)
+8. **Max 3 vòng** — sau 3 lần fix vẫn còn bug → DỪNG
+9. **Context kèm slash command PHẢI DÙNG**: Figma URL, SRS, module, variant, API
+10. **Không tự ý chạy stage tiếp theo NGOÀI workflow create**
+
+---
+
+## 🎯 FLOW HOÀN CHỈNH 1 LẦN CHẠY
+
+```bash
+# User tạo feature
+/vnpt_workflow_create <tên>
+# → Agent TỰ ĐỘNG: code → review → fix-loop → done
+
+# User xem kết quả
+/vnpt_workflow_status <tên>
+# → Review: ✅ Done (END)
+```
+
+---
+
+## ➕ WORKFLOW BỔ SUNG (2026-06-19)
+
+> Workflow Stitch2Flutter định nghĩa ở file riêng: `vnpt-workflow-stitch2flutter.mdc`
+
+---
+
+## 📋 WORKFLOW 8: `/vnpt_workflow_stitch2flutter`
+
+>Xên `vnpt-workflow-stitch2flutter.mdc`
+
+---
+
+*`alwaysApply: false` — chỉ attach khi prompt chứa `/vnpt_workflow_*`.*

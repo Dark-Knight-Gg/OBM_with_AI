@@ -1,0 +1,184 @@
+---
+description: Provider pattern with BaseProvider. Apply when writing or consuming any provider state.
+globs: **/*.dart
+alwaysApply: true
+---
+
+# Provider Pattern — obm_gen_with_ai
+
+> Variables: See `_project_config.mdc`. Key values: `{{PROVIDER_BASE}}`, `{{STATE_TYPE}}`, `{{STATE_VALUES}}`, `{{M_SHOW_LOADING}}`, `{{M_SHOW_LOADED}}`, `{{M_SHOW_ERROR}}`, `{{M_SHOW_NO_DATA}}`, `{{M_SET_STATE_NONE}}`, `{{M_SHOW_TOAST}}`, `{{M_SHOW_DIALOG}}`, `{{M_SHOW_PROGRESS}}`, `{{DIO_EXCEPTION}}`, `{{ERROR_MSG}}`.
+
+## State Machine
+
+```
+            {{M_SHOW_LOADING}}
+   none ──────────────────► loading
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+  {{M_SHOW_LOADED}}       {{M_SHOW_ERROR}}       {{M_SHOW_NO_DATA}}
+        │                     │                     │
+        ▼                     ▼                     ▼
+     loaded                error                 noData
+
+   {{M_SET_STATE_NONE}}  ◄── reset back to none
+```
+
+`{{PROVIDER_BASE}}` exposes: `currentState`, `{{BASE_PROVIDER_GETTERS}}`, `errorMessage`.
+
+## Provider Template
+
+```dart
+class XxxProvider extends {{PROVIDER_BASE}}<XxxService> {
+  XxxProvider(XxxService service) : super(service);
+
+  // KHÔNG redeclare {{STATE_TYPE}} — base already has it
+  List<XxxModel> items = const [];
+
+  Future<void> fetchItems() async {
+    {{M_SHOW_LOADING}};
+    try {
+      final res = await service.getItems();
+      items = res.data ?? const <XxxModel>[];
+      items.isEmpty ? {{M_SHOW_NO_DATA}} : {{M_SHOW_LOADED}};
+    } on {{DIO_EXCEPTION}} catch (e) {
+      errorMessage = {{ERROR_MSG}};
+      {{M_SHOW_ERROR}};
+    } catch (e) {
+      errorMessage = e.toString();
+      {{M_SHOW_ERROR}};
+    }
+  }
+}
+```
+
+### Multi-operation in same provider
+
+Track each operation with its own `{{STATE_TYPE}}` field:
+
+```dart
+{{STATE_TYPE}} detailState = {{G_STATE_NONE}};
+XxxModel? detail;
+
+Future<void> loadDetail(String id) async {
+  detailState = {{G_STATE_LOADING}};
+  notifyListeners();
+  try {
+    detail = await service.getDetail(id);
+    detailState = {{G_STATE_LOADED}};
+  } catch (_) {
+    detailState = {{G_STATE_ERROR}};
+  }
+  notifyListeners();
+}
+```
+
+## Consuming State
+
+### {{CONSUMER_BASE}} (PREFERRED — auto-switches on state)
+
+```dart
+class BodyXxxWidget extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return {{CONSUMER_BASE}}<XxxService, XxxProvider>(
+      contextParent: context,
+      onRepositoryLoading: (_) =>
+          const Center(child: CircularProgressIndicator()),
+      onRepositorySuccess: (repo) => _buildList(repo as XxxProvider),
+      onRepositoryError: (repo) => _buildError(repo as XxxProvider),
+      onRepositoryNoData: (repo) => const _EmptyView(),
+    );
+  }
+}
+```
+
+`{{CONSUMER_BASE}}` auto-calls `{{PROGRESS_LOAD}}.showProgress/dismissProgress` when `onRepositoryLoading` is not provided.
+
+### {{SELECTOR_BASE}} (ONLY when watching a specific field)
+
+```dart
+{{SELECTOR_BASE}}<XxxProvider>(
+  selector: (ctx, p) => p.items,
+  contextParrent: context,
+  onRepository: (ctx, repo) =>
+      Text((repo as XxxProvider).items.length.toString()),
+)
+```
+
+> Note: `{{SELECTOR_BASE}}` has a known issue where `onRepository` always receives `null` as the repository. Use `{{CONSUMER_BASE}}` or `context.select<T, R>()` when repository access is needed.
+
+### Direct read / watch
+
+```dart
+context.read<XxxProvider>().fetchItems();         // trigger action
+context.watch<XxxProvider>().items;               // listen to all changes
+context.select<XxxProvider, int>((p) => p.items.length);  // 1 field
+```
+
+## Dialog / Toast / Progress from Provider (eventStream)
+
+```dart
+// Dialog
+provider.{{M_SHOW_DIALOG}}(
+  type: {{DIALOG_TYPE_ENUM}}.warring,       // {{DIALOG_TYPES}}
+  title: {{I18N_CLASS}}.notification,
+  content: {{I18N_CLASS}}.warningNotConnectInternet,
+  onActionCallback: (action) {}, // {{DIALOG_ACTION_ENUM}}.{{DIALOG_ACTION_VALUES}}
+);
+
+// Toast
+provider.{{M_SHOW_TOAST}}(
+  {{I18N_CLASS}}.downloadDataSuccess,
+  type: {{TOAST_TYPE_ENUM}}.success,        // {{TOAST_TYPES}}
+  duration: const Duration(seconds: 2),
+);
+```
+
+`{{SCREEN_STATE_BASE}}` init handles eventStream → `DialogHelper`/`ToastHelper`/`ProgressHelper`.
+
+## Loading Counter (global)
+
+`{{LOADING_HUB}}` counts in-flight requests. To disable per-call loading indicator:
+
+```dart
+await client.post(
+  '/api/xxx',
+  data: req,
+  options: {{LOADING_SUPPRESS}},
+);
+```
+
+## Pull-to-Refresh / Load-More
+
+`{{LOAD_MORE_MIXIN}}` (in `base_provider.dart`):
+
+```dart
+class XxxProvider extends {{PROVIDER_BASE}}<XxxService> with {{LOAD_MORE_MIXIN}} {
+  // page, firstPage, limit=20, refreshControllerDefault are built-in
+
+  Future<void> onLoadMore() async {
+    emitLoadComplete(callback: () => page++);
+  }
+}
+```
+
+## DO / DON'T
+
+| DO                                                         | DON'T                                              |
+|------------------------------------------------------------|----------------------------------------------------|
+| Use `{{M_SHOW_LOADING}}/{{M_SHOW_LOADED}}/{{M_SHOW_ERROR}}/{{M_SHOW_NO_DATA}}` | Directly assign `currentState = {{STATE_TYPE}}.loaded`  |
+| Catch `{{DIO_EXCEPTION}}` separately (message already parsed)  | Catch generic `Exception` in provider (masks bugs) |
+| Send dialog/toast via `provider.{{M_SHOW_DIALOG}}/{{M_SHOW_TOAST}}` | Call `showDialog`/`fluttertoast` directly from widget |
+| `notifyListeners()` after mutating data                    | `setState()` in provider                           |
+| Separate `{{STATE_TYPE}}` field per operation              | Reuse `currentState` for multiple independent flows |
+
+## Review Checklist
+
+- [ ] Provider does NOT redeclare `{{STATE_TYPE}} currentState` (base already has it).
+- [ ] Every async action goes through `{{M_SHOW_LOADING}}` → `{{M_SHOW_LOADED}}/{{M_SHOW_ERROR}}/{{M_SHOW_NO_DATA}}`.
+- [ ] Catches BOTH `{{DIO_EXCEPTION}}` and generic `Exception`.
+- [ ] Dialog/Toast/Progress triggered from Provider, not from Widget.
+- [ ] No `setState` in provider.
+- [ ] No `BuildContext` stored in provider.
+- [ ] `mounted` checked after `await` in Widget.

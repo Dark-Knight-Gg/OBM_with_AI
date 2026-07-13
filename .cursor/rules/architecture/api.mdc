@@ -1,0 +1,147 @@
+---
+description: Network/API rules — BaseService + Dio + DioOption. Apply when writing service or data layer code.
+globs: **/*.dart
+alwaysApply: false
+---
+
+# API / Network Rules — obm_gen_with_ai
+
+> Variables: See `_project_config.mdc`. Key values: `{{SERVICE_BASE}}`, `{{DIO_CREATE}}`, `{{DIO_CREATE_FORM}}`, `{{DIO_FORM_INSTANCE}}`, `{{LOADING_INTERCEPTOR}}`, `{{DIO_EXCEPTION}}`, `{{ERROR_MSG}}`.
+
+## Principles
+
+1. **Service only parses JSON, contains no business logic.**
+2. **Provider only calls service, never calls Dio directly.**
+3. **UI never parses JSON or calls Dio.**
+4. **URL endpoint** — extract to a constant class when available. Inline string is acceptable for now.
+
+## Service Template
+
+```dart
+class XxxService extends {{SERVICE_BASE}} {
+  XxxService(Dio client) : super(client);
+
+  Future<XxxResponse> getItems() async {
+    final result = await client.get<Map<String, dynamic>>('/api/xxx');
+    return XxxResponse.fromJson(result.data!);
+  }
+
+  Future<XxxResponse> createItem(XxxRequest req) async {
+    final result = await client.post<Map<String, dynamic>>(
+      '/api/xxx',
+      data: req.toJson(),
+    );
+    return XxxResponse.fromJson(result.data!);
+  }
+}
+```
+
+### Multipart / Upload
+
+```dart
+final form = FormData.fromMap({
+  'file': await MultipartFile.fromPath(filePath, filename: filename),
+});
+final result = await client.post<Map<String, dynamic>>(
+  '/api/upload',
+  data: form,
+);
+```
+
+### Form-Urlencoded
+
+```dart
+final dio = {{DIO_CREATE_FORM}};
+// Content-Type header is set automatically
+```
+
+## Dio Initialization
+
+| Way                            | When to use                        |
+|--------------------------------|------------------------------------|
+| `{{DIO_CREATE}}`              | JSON (default)                     |
+| `{{DIO_CREATE_FORM}}`          | Form-urlencoded                    |
+| `{{DIO_FORM_INSTANCE}}`        | Singleton with interceptors pre-wired |
+
+`{{DIO_CREATE}}` ships with:
+- `LogInterceptor` (responseBody, error, requestBody; uses `printWrapped`).
+- `QueuedInterceptorsWrapper`:
+  - `onRequest`: adds `Authorization: Bearer ...` (via `_headerOption` callback if set, empty fallback).
+  - `onResponse`: calls `_callbackResponse` hook if set.
+  - `onError`:
+    - Network/timeout → sets message to `{{I18N_CLASS}}.warningNotConnectInternet`.
+    - 401 → retries once (clones request).
+    - 404 → sets message to `{{I18N_CLASS}}.warningNotFound`.
+    - Else → `initException(error)` (parses `data['title']`/`['message']`/`['msg']`/`['detail']`).
+
+## Request / Response Models
+
+```dart
+class XxxRequest {
+  final int page;
+  final int size;
+  XxxRequest({required this.page, required this.size});
+  Map<String, dynamic> toJson() => {'page': page, 'size': size};
+}
+
+class XxxResponse {
+  final List<XxxModel>? data;
+  final int? status;
+  final String? message;
+
+  XxxResponse({this.data, this.status, this.message});
+
+  factory XxxResponse.fromJson(Map<String, dynamic> json) => XxxResponse(
+        data: (json['data'] as List?)
+            ?.map((e) => XxxModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        status: json['status'] as int?,
+        message: json['message'] as String?,
+      );
+}
+```
+
+## Error Handling in Provider
+
+```dart
+} on {{DIO_EXCEPTION}} catch (e) {
+  // DioOption already parsed the message — e.message is ready to use
+  errorMessage = e.message ?? {{I18N_CLASS}}.warningNotConnectInternet;
+  {{M_SHOW_ERROR}};
+} catch (e) {
+  errorMessage = e.toString();
+  {{M_SHOW_ERROR}};
+}
+```
+
+## Loading Counter
+
+`{{LOADING_INTERCEPTOR}}` (enabled by default in `DioOption`) calls `{{LOADING_HUB}}.inc()`/`dec()` on every request/response. To suppress per-call:
+
+```dart
+await client.post(
+  '/api/xxx',
+  data: req,
+  options: {{LOADING_SUPPRESS}},
+);
+```
+
+## DO / DON'T
+
+| DO                                              | DON'T                                           |
+|-------------------------------------------------|-------------------------------------------------|
+| Return typed model (already parsed)              | Return raw `Response<Map<String, dynamic>>`      |
+| `errorMessage = e.message` (already parsed)     | Re-parse `e.response?.data['message']` in provider |
+| Endpoint as string literal in service (TODO: extract) | Hardcode URL in widget                    |
+| `req.toJson()` for body                         | Build Map inline and pass directly to Dio        |
+| Catch `{{DIO_EXCEPTION}}` in provider           | Catch generic `Exception` in service (masks bugs) |
+| Use `{{DIO_CREATE}}` for new features          | Create fresh `Dio()` (loses interceptors)      |
+
+## Review Checklist
+
+- [ ] Method returns typed model (not raw `Response`).
+- [ ] `client` uses `get/post/put/delete/patch` directly (no manual `RequestOptions` construction).
+- [ ] `{{DIO_EXCEPTION}}` caught in provider, not in service.
+- [ ] Endpoint has a comment (TODO: move to a Routes/Url constant class).
+- [ ] `req.toJson()` used for body (not inline Map).
+- [ ] NEVER instantiate `Dio()` directly — always go through `{{DIO_CREATE}}`.

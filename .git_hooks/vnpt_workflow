@@ -1,0 +1,1058 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════
+# VNPT WORKFLOW CLI v2.0 — Refactored
+# Single source of truth: DEVELOPMENT_STATUS.md (Markdown)
+# Thống nhất commands, parse Figma URL, parse module path,
+# validate state transitions, sửa file Markdown thực sự.
+# ═══════════════════════════════════════════════════════════════
+
+set -euo pipefail
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+BOLD='\033[1m'
+
+# ═══════════════════════════════════════════════════════════
+# CONFIG
+# ═══════════════════════════════════════════════════════════
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ═══════════════════════════════════════════════════════════
+# LOAD .workflow_config — auto-find từ script dir → project root
+# Khi đổi dự án: cập nhật .workflow_config tại project root
+# ═══════════════════════════════════════════════════════════
+find_wc_config() {
+    local dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    while [[ "$dir" != "/" ]]; do
+        if [[ -f "$dir/.workflow_config" ]]; then
+            echo "$dir/.workflow_config"
+            return 0
+        fi
+        dir="$(dirname "$dir")"
+    done
+    return 1
+}
+
+load_wc_config() {
+    local cfg
+    cfg=$(find_wc_config) || {
+        echo "WARN: .workflow_config not found" >&2
+        return 1
+    }
+    # shellcheck source=/dev/null
+    source "$cfg" 2>/dev/null || {
+        echo "WARN: Failed to source $cfg" >&2
+    }
+}
+
+# Load immediately
+load_wc_config
+
+# Project root resolution
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+RULES_DIR="$PROJECT_ROOT/.cursor/rules"
+
+# ═══════════════════════════════════════════════════════════
+# UTILITIES
+# ═══════════════════════════════════════════════════════════
+print_banner() {
+    echo -e "${CYAN}${BOLD}"
+    echo "╔══════════════════════════════════════════════════════════╗"
+    echo "║          VNPT WORKFLOW CLI v2.0                          ║"
+    echo "║          Single Source of Truth: DEVELOPMENT_STATUS.md   ║"
+    echo "╚══════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
+print_success() { echo -e "${GREEN}✅ $1${NC}"; }
+print_error()   { echo -e "${RED}❌ $1${NC}"; }
+print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
+print_info()    { echo -e "${BLUE}ℹ️  $1${NC}"; }
+print_stage()   { echo -e "${CYAN}[$1]${NC} $2"; }
+
+# Normalize feature name → snake_case lowercase
+normalize_name() {
+    local name="$1"
+    if [[ -z "$name" ]]; then echo ""; return 1; fi
+    echo "$name" | sed 's/ /_/g' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]//g'
+}
+
+# Convert snake_case → PascalCase
+to_pascal_case() {
+    local s="$1"
+    echo "$s" | sed 's/_/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)} 1' | sed 's/ //g'
+}
+
+# Today YYYY-MM-DD
+today() { date '+%Y-%m-%d'; }
+
+# ═══════════════════════════════════════════════════════════
+# STATUS VALIDATION + TRANSITIONS
+# ═══════════════════════════════════════════════════════════
+validate_stage() {
+    case "$1" in
+        dev|development)    echo "dev" ;;
+        review)             echo "review" ;;
+        fix|fixing|bug)     echo "fix" ;;
+        *) print_error "Stage không hợp lệ: $1 (chỉ: dev, review, fix)"; return 1 ;;
+    esac
+}
+
+status_emoji() {
+    case "$1" in
+        pending)            echo "⏳ Pending" ;;
+        progress|running)   echo "🔄 In Progress" ;;
+        done|complete)      echo "✅ Done" ;;
+        no_bug|clean)       echo "🧼 No Bug" ;;
+        failed|error)       echo "❌ Failed" ;;
+        *)                  echo "❓ $1" ;;
+    esac
+}
+
+# Valid transitions table
+is_valid_transition() {
+    local from_stage="$1" from_status="$2" to_stage="$3" to_status="$4"
+    # From any → pending is always valid (reset)
+    if [[ "$to_status" == "pending" ]]; then echo "yes"; return; fi
+
+    case "$from_stage:$from_status" in
+        dev:pending)        [[ "$to_stage:$to_status" == "dev:progress" ]] && echo "yes" || echo "no" ;;
+        dev:progress)       [[ "$to_stage:$to_status" == "dev:done" ]] && echo "yes" || echo "no" ;;
+        dev:done)           [[ "$to_stage:$to_status" == "review:progress" || "$to_stage:$to_status" == "review:pending" ]] && echo "yes" || echo "no" ;;
+        review:pending)     [[ "$to_stage:$to_status" == "review:progress" ]] && echo "yes" || echo "no" ;;
+        review:progress)    [[ "$to_stage:$to_status" == "review:no_bug" || "$to_stage:$to_status" == "review:failed" ]] && echo "yes" || echo "no" ;;
+        review:no_bug)      [[ "$to_stage:$to_status" == "review:done" ]] && echo "yes" || echo "no" ;;
+        review:done)        echo "no" ;;  # END
+        review:failed)      [[ "$to_stage:$to_status" == "fix:progress" || "$to_stage:$to_status" == "fix:pending" ]] && echo "yes" || echo "no" ;;
+        fix:pending)        [[ "$to_stage:$to_status" == "fix:progress" ]] && echo "yes" || echo "no" ;;
+        fix:progress)       [[ "$to_stage:$to_status" == "fix:done" ]] && echo "yes" || echo "no" ;;
+        fix:done)           [[ "$to_stage:$to_status" == "review:pending" ]] && echo "yes" || echo "no" ;;
+        *)                  echo "yes" ;;  # permissive default
+    esac
+}
+
+# ═══════════════════════════════════════════════════════════
+# FIND STATUS FILE
+# ═══════════════════════════════════════════════════════════
+find_status_file() {
+    local feature="$1"
+    local found=$(find "$PROJECT_ROOT" -path "*/$feature/DEVELOPMENT_STATUS.md" -type f 2>/dev/null | head -1)
+    echo "$found"
+}
+
+# Read current status from file
+read_current_status() {
+    local status_file="$1"
+    local stage="$2"
+    python3 - "$status_file" "$stage" <<'PYEOF'
+import sys, re
+path, stage = sys.argv[1], sys.argv[2]
+try:
+    with open(path) as f:
+        content = f.read()
+    # Match row: | Development | ⏳ Pending | 2026-06-14 | ... |
+    # Map stage names
+    stage_map = {"dev": ["Development", "Dev"], "review": ["Review"], "fix": ["Fix Bug", "Fix"]}
+    names = stage_map.get(stage, [stage.title()])
+    for name in names:
+        pattern = r'\|\s*' + re.escape(name) + r'\s*\|\s*([^\|]+)\|'
+        m = re.search(pattern, content)
+        if m:
+            cell = m.group(1).strip()
+            # Parse status (e.g. "⏳ Pending" or "🔄 In Progress")
+            for s in ["pending", "progress", "done", "failed", "no_bug"]:
+                if s in cell.lower():
+                    print(s)
+                    sys.exit(0)
+    print("pending")
+except FileNotFoundError:
+    print("pending")
+PYEOF
+}
+
+# ═══════════════════════════════════════════════════════════
+# CMD: CREATE
+# ═══════════════════════════════════════════════════════════
+cmd_create() {
+    local feature_name=""
+    local feature_path=""
+    local srs_file=""
+    local figma_url=""
+    local postman_collection=""
+    local module_path=""
+
+    # Parse args
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --srs)     srs_file="$2"; shift 2 ;;
+            --figma)   figma_url="$2"; shift 2 ;;
+            --postman) postman_collection="$2"; shift 2 ;;
+            --module)  module_path="$2"; shift 2 ;;
+            -*)        print_error "Unknown flag: $1"; return 1 ;;
+            *)
+                if [[ -z "$feature_name" ]]; then feature_name="$1"
+                elif [[ -z "$feature_path" ]]; then feature_path="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$feature_name" ]]; then
+        print_error "Usage: vnpt_workflow create <feature_name> [path] [--srs <file>] [--figma <url>] [--postman <name>] [--module <path>]"
+        echo ""
+        echo "Examples:"
+        echo "  vnpt_workflow create user_profile"
+        echo "  vnpt_workflow create list_event vna_default/lib/event_screens \\"
+        echo "    --srs SRS_Event.md \\"
+        echo "    --figma 'https://figma.com/design/.../?node-id=74-7479' \\"
+        echo "    --postman MobileEventAiGen \\"
+        echo "    --module vna_office/lib/screens"
+        return 1
+    fi
+
+    local name_lower=$(normalize_name "$feature_name")
+    local name_upper=$(to_pascal_case "$name_lower")
+    local name_display=$(echo "$feature_name" | sed 's/_/ /g')
+
+    # ── Auto-detect module path từ SRS path nếu không có --module ──
+    if [[ -z "$module_path" && -n "$srs_file" ]]; then
+        # SRS path dạng: vna_office/lib/screens/ai_gen/srs/list_task/SRS_LIST_TASK.md
+        # → module = vna_office/lib/screens/ai_gen
+        module_path=$(SRS_FILE="$srs_file" python3 <<'PYEOF'
+import os, re
+path = os.environ.get("SRS_FILE", "")
+m = re.search(r'^(.*?)/(?:srs|specs?)/', path)
+if m:
+    print(m.group(1))
+else:
+    print(re.sub(r'/[^/]+\.(md|markdown)$', '', path))
+PYEOF
+)
+    fi
+
+    # Nếu không có --module mà có module từ SRS → dùng nó làm feature_path
+    if [[ -z "$feature_path" && -n "$module_path" ]]; then
+        feature_path="$module_path"
+    fi
+
+    # Default path nếu vẫn chưa có
+    if [[ -z "$feature_path" ]]; then
+        if [[ -n "$module_path" ]]; then
+            feature_path="$module_path"
+        else
+            feature_path="${WC_FEATURES_PATH:-lib/features}"
+        fi
+    fi
+
+    local feature_dir="$PROJECT_ROOT/$feature_path/$name_lower"
+
+    print_banner
+    echo -e "${BOLD}Feature:${NC} $name_display"
+    echo -e "${BOLD}Path:${NC} $feature_dir"
+    echo ""
+
+    # Show 3 sources
+    echo -e "${BOLD}📥 Input Sources:${NC}"
+    if [[ -n "$srs_file" ]]; then
+        print_stage "SRS" "File: $srs_file"
+    else
+        echo -e "${YELLOW}   SRS: not provided${NC}"
+    fi
+    if [[ -n "$figma_url" ]]; then
+        print_stage "FIGMA" "URL: $figma_url"
+    else
+        echo -e "${YELLOW}   Figma: not provided${NC}"
+    fi
+    if [[ -n "$postman_collection" ]]; then
+        print_stage "POSTMAN" "Collection: $postman_collection"
+    else
+        echo -e "${YELLOW}   Postman: not provided${NC}"
+    fi
+    echo ""
+
+    # Check exists
+    if [[ -d "$feature_dir" ]]; then
+        print_warning "Feature '$name_lower' đã tồn tại!"
+        if [[ -f "$feature_dir/DEVELOPMENT_STATUS.md" ]]; then
+            print_info "DEVELOPMENT_STATUS.md hiện tại:"
+            cat "$feature_dir/DEVELOPMENT_STATUS.md"
+        fi
+        return 1
+    fi
+
+    # Create dirs
+    print_stage "CREATE" "Creating folder structure..."
+    mkdir -p "$feature_dir/component"
+    mkdir -p "$feature_dir/model"
+    mkdir -p "$feature_dir/widget"
+    mkdir -p "$feature_dir/assets"
+    mkdir -p "$feature_dir/.vnpt_cache"
+    print_success "Folder created"
+
+    # ── Parse Figma URL → fileKey + nodeId ──
+    local figma_file_key=""
+    local figma_node_id=""
+    if [[ -n "$figma_url" ]]; then
+        local parsed=$(FIGMA_URL="$figma_url" python3 <<'PYEOF'
+import os, re, json
+url = os.environ.get("FIGMA_URL", "")
+fk, nid = "", ""
+m = re.search(r'/design/([A-Za-z0-9]+)/.*?[?&]node-id=([0-9]+[-:][0-9]+)', url)
+if m:
+    fk = m.group(1)
+    nid = m.group(2).replace("-", ":")
+else:
+    m = re.search(r'/(?:file|design)/([A-Za-z0-9]+)', url)
+    if m: fk = m.group(1)
+    m = re.search(r'node-id=([0-9]+[-:][0-9]+)', url)
+    if m: nid = m.group(1).replace("-", ":")
+print(json.dumps({"file_key": fk, "node_id": nid}))
+PYEOF
+)
+        figma_file_key=$(echo "$parsed" | python3 -c "import sys,json;print(json.load(sys.stdin)['file_key'])")
+        figma_node_id=$(echo "$parsed" | python3 -c "import sys,json;print(json.load(sys.stdin)['node_id'])")
+        print_stage "FIGMA" "Parsed: fileKey=$figma_file_key, nodeId=$figma_node_id"
+    fi
+
+    # ── Save sources.json (đầy đủ + parsed data) ──
+    print_stage "CACHE" "Saving sources.json..."
+    cat > "$feature_dir/.vnpt_cache/sources.json" <<EOF
+{
+  "feature": "$name_lower",
+  "display_name": "$name_display",
+  "module": "$module_path",
+  "created": "$(today)",
+  "srs": {
+    "file": "$srs_file",
+    "provided": $([ -n "$srs_file" ] && echo "true" || echo "false")
+  },
+  "figma": {
+    "url": "$figma_url",
+    "file_key": "$figma_file_key",
+    "node_id": "$figma_node_id",
+    "provided": $([ -n "$figma_url" ] && echo "true" || echo "false")
+  },
+  "postman": {
+    "collection": "$postman_collection",
+    "provided": $([ -n "$postman_collection" ] && echo "true" || echo "false")
+  }
+}
+EOF
+    print_success "sources.json saved"
+
+    # ── Create mapping doc (template rỗng — agent điền từ 3 nguồn) ──
+    print_stage "CREATE" "Creating mapping doc..."
+    cat > "$feature_dir/${name_lower}_mapping.md" <<EOF
+# 📐 Feature: ${name_display}
+
+> **Feature:** \`${name_lower}\`
+> **Date:** $(today)
+> **Status:** Draft → Review → Approved
+
+---
+
+## 1. INPUTS
+
+### 1.1 SRS Reference
+| Field | Value |
+|-------|-------|
+| SRS File | ${srs_file:-_⚠️ CHƯA CÓ — điền sau_} |
+| Version | _TBD_ |
+
+### 1.2 Figma Design
+| Field | Value |
+|-------|-------|
+| URL | ${figma_url:-_⚠️ CHƯA CÓ_} |
+| fileKey | \`${figma_file_key:-_TBD_}\` |
+| nodeId | \`${figma_node_id:-_TBD_}\` |
+
+### 1.3 User Stories
+<!-- Trích từ SRS sau khi đọc -->
+
+---
+
+## 2. DESIGN → CODE MAPPING (điền từ Figma MCP)
+
+### 2.1 Screen Mapping
+| Figma Screen | Code File | Route |
+|--------------|-----------|-------|
+
+### 2.2 Component Mapping
+| Figma Component | Code Widget | Props |
+|-----------------|-------------|-------|
+
+### 2.3 Style Mapping
+| Figma Style | Code Token |
+|-------------|------------|
+
+---
+
+## 3. DATA MODELS (điền từ SRS + Postman)
+
+### 3.1 Entity Mapping
+| SRS Field | Model Field | Type | Postman Schema |
+|-----------|-------------|------|----------------|
+
+---
+
+## 4. API MAPPING (điền từ Postman MCP)
+
+### 4.1 Endpoint Mapping
+| Action | Method | Endpoint | Service Method |
+|--------|--------|----------|----------------|
+
+---
+
+## 5. STATE MANAGEMENT
+\`\`\`
+Screen (MultiProvider + BaseScreen)
+  └── Body<FEATURE>Widget (SelectorBase)
+        └── <FEATURE>Provider (BaseRepository)
+              └── <FEATURE>Service (BaseService)
+                    └── Dio → UrlEOffice.*
+\`\`\`
+
+---
+
+*Generated by VNPT Workflow CLI v2.0 - $(today)*
+EOF
+    print_success "Mapping doc created: ${name_lower}_mapping.md"
+
+    # ── Screen template ──
+    cat > "$feature_dir/${name_lower}_screen.dart" <<SCREEN_EOF
+import '${WC_IMPORT_UTILITIES:-package:vna_utilities/index.dart}';
+import 'component/${name_lower}_provider.dart';
+import 'component/${name_lower}_service.dart';
+import 'widget/body_${name_lower}_widget.dart';
+
+class ${name_upper}Screen extends ${WC_SCREEN_BASE_CLASS:-BasePageStatefulWidget} {
+  const ${name_upper}Screen({super.key});
+
+  @override
+  State<${name_upper}Screen> createState() => _${name_upper}ScreenState();
+}
+
+class _${name_upper}ScreenState extends State<${name_upper}Screen> {
+  @override
+  Widget build(BuildContext context) {
+    final Dio dio = DioOption().createDio();
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => ${name_upper}Provider(${name_upper}Service(dio)),
+        ),
+      ],
+      // BẮT BUỘC dùng BaseScreen — KHÔNG dùng Scaffold trực tiếp
+      child: ${WC_SCREEN_BASE_CLASS:-BasePageStatefulWidget}(
+        title: ${WC_I18N_CLASS:-AppStrings}.commonLoading,
+        hideLeftIcon: true,
+        backgroundColorBody: ${WC_BG_LIGHT:-ColorApp.colorF8FCFF},
+        body: const Body${name_upper}Widget(),
+      ),
+    );
+  }
+}
+SCREEN_EOF
+
+    # ── Provider template ──
+    cat > "$feature_dir/component/${name_lower}_provider.dart" <<PROV_EOF
+import '${WC_IMPORT_UTILITIES:-package:vna_utilities/index.dart}';
+import '${name_lower}_service.dart';
+import '../model/${name_lower}_model.dart';
+
+class ${name_upper}Provider extends ${WC_PROVIDER_BASE:-BaseProvider}<${name_upper}Service> {
+  ${name_upper}Provider(${name_upper}Service service) : super(service);
+
+  // KHÔNG declare \`Status status\` — BaseRepository đã có _status
+  List<${name_upper}Model> items = const [];
+
+  Future<void> fetchItems() async {
+    startLoading();
+    try {
+      final res = await service.getItems();
+      items = res.data ?? const <${name_upper}Model>[];
+      items.isEmpty ? receivedNoData() : finishLoading();
+    } on ${WC_ERROR_HANDLING:-DioException} catch (e) {
+      receivedError();
+      errorMessage = e.message ?? e.toString();
+    } catch (e) {
+      receivedError();
+      errorMessage = e.toString();
+    }
+  }
+}
+PROV_EOF
+
+    # ── Service template ──
+    cat > "$feature_dir/component/${name_lower}_service.dart" <<SVC_EOF
+import '${WC_IMPORT_UTILITIES:-package:vna_utilities/index.dart}';
+import '../model/${name_lower}_model.dart';
+
+class ${name_upper}Service extends ${WC_SERVICE_BASE:-BaseService} {
+  ${name_upper}Service(Dio client) : super(client);
+
+  // TODO: Thay bằng endpoint thực từ Postman MCP
+  static const String _endpoint = '__TODO_ENDPOINT__';
+
+  // TODO: Method thực từ Postman MCP (GET/POST/PUT/DELETE)
+  static const String _method = '__TODO_METHOD__';
+
+  Future<${name_upper}Response> getItems() async {
+    final result = await client.fetch<Map<String, dynamic>>(
+      _setStreamType<${name_upper}Response>(
+        Options(method: _method).compose(
+          client.options,
+          _endpoint,
+        ),
+      ),
+    );
+    return ${name_upper}Response.fromJson(result.data!);
+  }
+
+  RequestOptions _setStreamType<T>(RequestOptions r) {
+    if (T != dynamic &&
+        !(r.responseType == ResponseType.bytes || r.responseType == ResponseType.stream)) {
+      r.responseType = T == String ? ResponseType.plain : ResponseType.json;
+    }
+    return r;
+  }
+}
+SVC_EOF
+
+    # ── Model template ──
+    cat > "$feature_dir/model/${name_lower}_model.dart" <<MODEL_EOF
+// TODO: Bổ sung fields theo Postman response schema
+class ${name_upper}Model {
+  final int? id;
+  final String? title;
+
+  ${name_upper}Model({this.id, this.title});
+
+  factory ${name_upper}Model.fromJson(Map<String, dynamic> json) {
+    return ${name_upper}Model(
+      id: json['id'],
+      title: json['title'],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+  };
+}
+
+class ${name_upper}Response {
+  final List<${name_upper}Model>? data;
+  final int? status;
+  final String? message;
+
+  ${name_upper}Response({this.data, this.status, this.message});
+
+  factory ${name_upper}Response.fromJson(Map<String, dynamic> json) {
+    return ${name_upper}Response(
+      data: (json['data'] as List?)
+          ?.map((e) => ${name_upper}Model.fromJson(e))
+          .toList(),
+      status: json['status'],
+      message: json['message'],
+    );
+  }
+}
+MODEL_EOF
+
+    # ── Body widget template ──
+    cat > "$feature_dir/widget/body_${name_lower}_widget.dart" <<BODY_EOF
+import '${WC_IMPORT_UTILITIES:-package:vna_utilities/index.dart}';
+import '../component/${name_lower}_provider.dart';
+import '../model/${name_lower}_model.dart';
+
+class Body${name_upper}Widget extends StatefulWidget {
+  const Body${name_upper}Widget({super.key});
+
+  @override
+  State<Body${name_upper}Widget> createState() => _Body${name_upper}WidgetState();
+}
+
+class _Body${name_upper}WidgetState extends State<Body${name_upper}Widget> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<${name_upper}Provider>().fetchItems();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // KHÔNG bọc Scaffold/AppBar/ProgressHUD (BaseScreen đã có)
+    return ${WC_SELECTOR_BASE:-SelectorBase}<${name_upper}Provider>(
+      selector: (ctx, p) => p.status,
+      contextParrent: context,
+      onRepositorySuccess: (repo) {
+        final p = repo as ${name_upper}Provider;
+        return _buildContent(p);
+      },
+      onRepositoryError: (repo) => ${WC_ERROR_WIDGET:-ErrorIndicator}(),
+      onRepositoryNoData: (repo) => ${WC_EMPTY_WIDGET:-EmptyListIndicator}(),
+    );
+  }
+
+  Widget _buildContent(${name_upper}Provider p) {
+    if (p.items.isEmpty) {
+      return Center(child: Text(${WC_I18N_CLASS:-AppStrings}.commonNoData, style: ${WC_TEXT_COMMON:-OneUiText.common}));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      itemCount: p.items.length,
+      itemBuilder: (_, i) => _buildItem(p.items[i]),
+    );
+  }
+
+  Widget _buildItem(${name_upper}Model item) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: ${WC_COMMON_RADIUS:-BorderRadius.circular(16)},
+        border: Border.all(color: ${WC_BG_LIGHT:-ColorApp.colorF8FCFF}),
+      ),
+      child: Text(item.title ?? '', style: ${WC_TEXT_COMMON:-OneUiText.common}),
+    );
+  }
+}
+BODY_EOF
+
+    # ── DEVELOPMENT_STATUS.md (Single Source of Truth) ──
+    print_stage "CREATE" "Creating DEVELOPMENT_STATUS.md..."
+    cat > "$feature_dir/DEVELOPMENT_STATUS.md" <<EOF
+# 📋 ${name_display} - Development Status
+
+## Thông Tin
+
+| Trường | Giá trị |
+|--------|---------|
+| Feature | \`${name_lower}\` |
+| Path | \`${feature_path}/${name_lower}/\` |
+| Module | \`${module_path}\` |
+| Created | $(today) |
+| Last Updated | $(today) |
+
+---
+
+## 🔄 Trạng Thái
+
+| Stage | Status | Updated | Note |
+|-------|--------|---------|------|
+| Development | ⏳ Pending | $(today) | Chưa bắt đầu |
+| Review | ⏳ Pending | - | - |
+| Fix Bug | ⏳ Pending | - | - |
+
+---
+
+## 📁 Files
+
+- [ ] ${name_lower}_screen.dart
+- [ ] component/${name_lower}_provider.dart
+- [ ] component/${name_lower}_service.dart
+- [ ] model/${name_lower}_model.dart
+- [ ] widget/body_${name_lower}_widget.dart
+- [ ] ${name_lower}_mapping.md
+
+---
+
+## 📥 Input Sources
+
+| Source | Provided | File/Ref |
+|--------|----------|----------|
+| SRS | $([ -n "$srs_file" ] && echo "✅" || echo "❌") | ${srs_file:-_không có_} |
+| Figma | $([ -n "$figma_url" ] && echo "✅" || echo "❌") | ${figma_url:-_không có_} |
+| Postman | $([ -n "$postman_collection" ] && echo "✅" || echo "❌") | ${postman_collection:-_không có_} |
+
+---
+
+## 🔍 Review Checklist
+
+- [ ] Screen dùng \`BaseScreen\` (KHÔNG \`Scaffold\` trực tiếp)
+- [ ] Body KHÔNG có \`Scaffold\` / \`AppBar\` / \`ProgressHUD\`
+- [ ] Architecture: Provider pattern
+- [ ] Colors: \`ColorApp.*\`
+- [ ] Strings: \`LocaleKeys.*\`
+- [ ] Text: \`OneUiText.*\`
+- [ ] URLs: \`UrlEOffice.*\`
+- [ ] SelectorBase thay vì ConsumerBase
+- [ ] Null safety checked
+- [ ] mounted check sau addPostFrameCallback
+- [ ] No print/debug statements
+- [ ] No TODO comments
+
+---
+
+## 🐛 Bugs Log
+
+| # | Date | Description | Severity | Status | Fixed |
+|---|------|-------------|----------|--------|-------|
+
+---
+
+## 📝 Changelog
+
+| Date | Stage | Change | By |
+|------|-------|--------|-----|
+| $(today) | Dev | Feature created | CLI |
+EOF
+    print_success "DEVELOPMENT_STATUS.md created"
+
+    print_success "Feature '$name_lower' đã được tạo!"
+    echo ""
+    echo -e "${BOLD}📂 Files created:${NC}"
+    ls -la "$feature_dir"
+    echo ""
+    echo -e "${BOLD}🎯 Next steps:${NC}"
+    echo "  1. Đọc 3 nguồn (SRS + Figma MCP + Postman MCP) → điền mapping doc"
+    echo "  2. Code 5 file Dart theo mapping doc"
+    echo "  3. ./vnpt_workflow update ${name_lower} dev progress"
+    echo "  4. ./vnpt_workflow update ${name_lower} dev done"
+    echo "  5. ./vnpt_workflow review ${name_lower}"
+    echo ""
+}
+
+# ═══════════════════════════════════════════════════════════
+# CMD: UPDATE (SỬA FILE MARKDOWN THỰC SỰ)
+# ═══════════════════════════════════════════════════════════
+cmd_update() {
+    local feature="$1"
+    local stage="$2"
+    local status_input="$3"
+    shift 3 2>/dev/null || true
+    local note="$*"
+
+    if [[ -z "$feature" || -z "$stage" || -z "$status_input" ]]; then
+        print_error "Usage: vnpt_workflow update <feature> <stage> <status> [note]"
+        echo ""
+        echo "Stages: dev | review | fix"
+        echo "Status: pending | progress | done | no_bug | failed"
+        return 1
+    fi
+
+    local name_lower=$(normalize_name "$feature")
+    local stage_valid=$(validate_stage "$stage")
+    local status_text=$(status_emoji "$status_input")
+    local today_str=$(today)
+    local now_ts=$(date '+%Y-%m-%d %H:%M')
+
+    local status_file=$(find_status_file "$name_lower")
+    if [[ -z "$status_file" ]]; then
+        print_error "Không tìm thấy feature '$name_lower'!"
+        print_info "Tạo mới: vnpt_workflow create $name_lower"
+        return 1
+    fi
+
+    # ── Validate transition ──
+    local current_status=$(read_current_status "$status_file" "$stage_valid")
+    local validation=$(is_valid_transition "$stage_valid" "$current_status" "$stage_valid" "$status_input")
+    if [[ "$validation" == "no" ]]; then
+        print_warning "Transition không hợp lệ: $stage_valid:$current_status → $stage_valid:$status_input"
+        print_info "Đã ghi đè (permissive mode). State machine chỉ là guidance."
+    fi
+
+    # ── Stage display name trong bảng ──
+    local stage_display
+    case "$stage_valid" in
+        dev)    stage_display="Development" ;;
+        review) stage_display="Review" ;;
+        fix)    stage_display="Fix Bug" ;;
+    esac
+
+    # ── SỬA FILE DEVELOPMENT_STATUS.md (bằng Python — chính xác hơn sed) ──
+    python3 - "$status_file" "$stage_display" "$status_text" "$today_str" "$note" "$now_ts" "$stage_valid" <<'PYEOF'
+import sys, re
+
+path = sys.argv[1]
+stage_display = sys.argv[2]
+status_text = sys.argv[3]
+today_str = sys.argv[4]
+note = sys.argv[5]
+now_ts = sys.argv[6]
+stage_valid = sys.argv[7]
+
+with open(path) as f:
+    content = f.read()
+
+# 1) Update bảng Trạng Thái — thay thế dòng chứa stage_display
+lines = content.split("\n")
+new_lines = []
+updated = False
+for line in lines:
+    if re.match(r'^\|\s*' + re.escape(stage_display) + r'\s*\|', line):
+        cells = [c.strip() for c in line.strip().strip('|').split('|')]
+        if len(cells) >= 4:
+            cells[1] = status_text
+            cells[2] = today_str
+            cells[3] = note or '-'
+            line = '| ' + ' | '.join(cells) + ' |'
+            updated = True
+    new_lines.append(line)
+
+if not updated:
+    print(f"WARN: Không tìm thấy row cho stage '{stage_display}'", file=sys.stderr)
+
+content = "\n".join(new_lines)
+
+# 2) Update Last Updated field — giữ đúng 1 space trước/sau value
+content = re.sub(
+    r'(\|\s*Last Updated\s*\|\s*)[^|]*(\s*\|)',
+    r'\g<1> ' + today_str + r'\g<2>',
+    content, count=1
+)
+# Normalize: " |  value |" → " | value |" (fix double space)
+content = re.sub(
+    r'(\|\s*Last Updated\s*\|\s*) +(2026-\d{2}-\d{2})(\s*\|)',
+    r'\g<1>\g<2>\g<3>',
+    content, count=1
+)
+
+# 3) Append Changelog
+changelog_row = f"| {today_str} | {stage_valid.title()} | {status_text} |"
+if note:
+    changelog_row += f" {note} |"
+else:
+    changelog_row += " |"
+changelog_row += " Agent |"
+
+# Tìm dòng cuối của bảng Changelog (dòng bắt đầu "|") và thêm vào sau
+# Đơn giản: append vào cuối file trước "---" nếu có
+if "## 📝 Changelog" in content:
+    # Tìm vị trí bảng Changelog và append row mới vào sau dòng header + separator
+    parts = content.split("## 📝 Changelog", 1)
+    if len(parts) == 2:
+        # Tìm dòng cuối cùng có dạng "| ... |" trong phần 2
+        after = parts[1]
+        lines = after.split("\n")
+        # Tìm dòng index cuối cùng match pattern table row
+        last_idx = -1
+        for i, line in enumerate(lines):
+            if re.match(r'^\|\s*\|?\s*[^|]*\s*\|', line):
+                last_idx = i
+        if last_idx >= 0:
+            lines.insert(last_idx + 1, changelog_row)
+            after = "\n".join(lines)
+        content = parts[0] + "## 📝 Changelog" + after
+
+with open(path, "w") as f:
+    f.write(content)
+
+print(f"UPDATED: stage={stage_display} status={status_text}")
+PYEOF
+
+    print_success "Updated file: $status_file"
+    print_info "Stage: $stage_display → $status_text"
+    print_info "Date: $today_str"
+    [[ -n "$note" ]] && print_info "Note: $note"
+    echo ""
+
+    # Show bảng Trạng Thái sau update
+    echo -e "${BOLD}📋 Current status:${NC}"
+    grep -A 5 "Trạng Thái" "$status_file" | head -8
+}
+
+# ═══════════════════════════════════════════════════════════
+# CMD: REVIEW (mark progress + guide agent)
+# ═══════════════════════════════════════════════════════════
+cmd_review() {
+    local feature="$1"
+    if [[ -z "$feature" ]]; then
+        print_error "Usage: vnpt_workflow review <feature>"
+        return 1
+    fi
+
+    local name_lower=$(normalize_name "$feature")
+    print_banner
+    print_stage "REVIEW" "Feature: $name_lower"
+
+    # Mark review progress (chỉ update status)
+    cmd_update "$name_lower" review progress "Bắt đầu review"
+    echo ""
+
+    # Tìm file path
+    local status_file=$(find_status_file "$name_lower")
+    if [[ -z "$status_file" ]]; then
+        print_error "Không tìm thấy feature '$name_lower'!"
+        return 1
+    fi
+
+    local feature_dir=$(dirname "$status_file")
+
+    echo -e "${BOLD}🔍 Review checklist:${NC}"
+    echo "  Feature dir: $feature_dir"
+    echo "  Review criteria: $RULES_DIR/review/review-criteria.mdc"
+    echo ""
+
+    # Optionally run auto-review.sh if exists
+    local auto_review="$SCRIPT_DIR/auto_review.sh"
+    if [[ -x "$auto_review" ]]; then
+        print_stage "AUTO" "Running auto_review.sh..."
+        "$auto_review" "$feature_dir" "$name_lower" || true
+    else
+        echo "📋 Hãy check 12+ tiêu chí trong review-criteria.mdc:"
+        echo "  - Scaffold vs BaseScreen"
+        echo "  - Hardcoded colors/strings/URLs"
+        echo "  - SelectorBase vs ConsumerBase"
+        echo "  - mounted check, dispose, etc."
+    fi
+    echo ""
+
+    echo -e "${BOLD}Sau review:${NC}"
+    echo "  Nếu PASS: ./vnpt_workflow update $name_lower review no_bug 'Clean code'"
+    echo "             ./vnpt_workflow update $name_lower review done"
+    echo "  Nếu FAIL: ./vnpt_workflow update $name_lower review failed 'N bugs'"
+    echo "             ./vnpt_workflow update $name_lower fix progress"
+}
+
+# ═══════════════════════════════════════════════════════════
+# CMD: FIX (mark progress + guide agent)
+# ═══════════════════════════════════════════════════════════
+cmd_fix() {
+    local feature="$1"
+    if [[ -z "$feature" ]]; then
+        print_error "Usage: vnpt_workflow fix <feature>"
+        return 1
+    fi
+
+    local name_lower=$(normalize_name "$feature")
+    print_banner
+    print_stage "FIX" "Feature: $name_lower"
+
+    cmd_update "$name_lower" fix progress "Bắt đầu fix"
+    echo ""
+
+    local status_file=$(find_status_file "$name_lower")
+    if [[ -z "$status_file" ]]; then
+        print_error "Không tìm thấy feature '$name_lower'!"
+        return 1
+    fi
+
+    echo -e "${BOLD}📋 Bugs Log:${NC}"
+    grep -A 20 "🐛 Bugs Log" "$status_file" | head -25
+    echo ""
+
+    echo -e "${BOLD}Sau fix:${NC}"
+    echo "  ./vnpt_workflow update $name_lower fix done 'Đã fix N bugs'"
+    echo "  ./vnpt_workflow update $name_lower review pending 'Reset để review lại'"
+}
+
+# ═══════════════════════════════════════════════════════════
+# CMD: STATUS
+# ═══════════════════════════════════════════════════════════
+cmd_status() {
+    local feature="$1"
+
+    if [[ -n "$feature" ]]; then
+        local name_lower=$(normalize_name "$feature")
+        local status_file=$(find_status_file "$name_lower")
+        if [[ -z "$status_file" ]]; then
+            print_error "Không tìm thấy feature '$name_lower'!"
+            return 1
+        fi
+        echo -e "${BOLD}📋 Status for: ${name_lower}${NC}"
+        echo ""
+        cat "$status_file"
+    else
+        # List all features + bảng summary
+        print_banner
+        local status_files=$(find "$PROJECT_ROOT" -name "DEVELOPMENT_STATUS.md" -type f 2>/dev/null)
+        if [[ -z "$status_files" ]]; then
+            print_warning "Chưa có feature nào!"
+            echo "Tạo: ./vnpt_workflow create <feature_name>"
+            return 0
+        fi
+
+        echo -e "${BOLD}📁 Features Status Overview${NC}"
+        printf "${CYAN}%-30s %-15s %-15s %-15s${NC}\n" "Feature" "Dev" "Review" "Fix"
+        echo "────────────────────────────────────────────────────────────────"
+
+        for file in $status_files; do
+            local dir=$(dirname "$file")
+            local name=$(basename "$dir")
+            local dev_status=$(read_current_status "$file" "dev")
+            local review_status=$(read_current_status "$file" "review")
+            local fix_status=$(read_current_status "$file" "fix")
+            local dev_label=$(status_emoji "$dev_status" 2>/dev/null || echo "⏳ Pending")
+            local review_label=$(status_emoji "$review_status" 2>/dev/null || echo "⏳ Pending")
+            local fix_label=$(status_emoji "$fix_status" 2>/dev/null || echo "⏳ Pending")
+            printf "%-30s %-15s %-15s %-15s\n" "$name" "$dev_label" "$review_label" "$fix_label"
+        done
+        echo ""
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════
+# CMD: LIST
+# ═══════════════════════════════════════════════════════════
+cmd_list() {
+    cmd_status ""
+}
+
+# ═══════════════════════════════════════════════════════════
+# CMD: HELP
+# ═══════════════════════════════════════════════════════════
+cmd_help() {
+    print_banner
+    echo -e "${BOLD}USAGE:${NC}"
+    echo "  vnpt_workflow <command> [arguments]"
+    echo ""
+    echo -e "${BOLD}COMMANDS:${NC}"
+    echo "  create <name> [path] [--srs <file>] [--figma <url>] [--postman <name>] [--module <path>]"
+    echo "  status [feature]              Xem trạng thái feature (hoặc tất cả)"
+    echo "  update <feature> <stage> <status> [note]"
+    echo "                               Update status + SỬA file DEVELOPMENT_STATUS.md"
+    echo "  review <feature>              Chạy code review"
+    echo "  fix <feature>                 Fix bugs (loop review)"
+    echo "  list                          List tất cả features"
+    echo "  help                          Hiển thị help này"
+    echo ""
+    echo -e "${BOLD}STAGES:${NC} dev | review | fix"
+    echo -e "${BOLD}STATUS:${NC} pending ⏳ | progress 🔄 | done ✅ | no_bug 🧼 | failed ❌"
+    echo ""
+    echo -e "${BOLD}CREATE FLAGS (3-SOURCE WORKFLOW):${NC}"
+    echo "  --srs <file>        SRS markdown file path"
+    echo "  --figma <url>       Figma URL với node-id"
+    echo "  --postman <name>    Postman collection name"
+    echo "  --module <path>     Module path (VD: vna_office/lib/screens/ai_gen)"
+    echo ""
+    echo -e "${BOLD}EXAMPLES:${NC}"
+    echo "  vnpt_workflow create user_profile"
+    echo "  vnpt_workflow create list_event vna_default/lib/event_screens \\"
+    echo "    --srs SRS_Event.md \\"
+    echo "    --figma 'https://figma.com/design/.../?node-id=74-7479' \\"
+    echo "    --postman MobileEventAiGen"
+}
+
+# ═══════════════════════════════════════════════════════════
+# MAIN
+# ═══════════════════════════════════════════════════════════
+COMMAND="${1:-help}"
+shift 2>/dev/null || true
+
+case "$COMMAND" in
+    create|c)  cmd_create "$@" ;;
+    status|s)  cmd_status "${1:-}" ;;
+    update|u)  cmd_update "$@" ;;
+    review|r)  cmd_review "${1:-}" ;;
+    fix|f)     cmd_fix "${1:-}" ;;
+    list|l)    cmd_list ;;
+    help|h|--help|-h) cmd_help ;;
+    *)
+        print_error "Unknown command: $COMMAND"
+        echo "Gõ 'vnpt_workflow help' để xem hướng dẫn."
+        exit 1
+        ;;
+esac

@@ -1,0 +1,128 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Workflow Config — Shell scripts source of truth
+# Agent reads _project_config.mdc (Markdown, {{VARIABLE}} tokens)
+# Shell scripts source THIS file (plain KEY=VALUE)
+# When adding variables: update BOTH files
+# Project: obm_gen_with_ai
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Project ──────────────────────────────────────────────────────────────
+WC_PROJECT_NAME=obm_gen_with_ai
+WC_PACKAGE_IMPORT=package:obm_gen_with_ai/
+WC_FEATURES_PATH=lib/features/
+WC_CORE_PATH=lib/core/
+WC_ASSETS_PATH=lib/assets/
+
+# ── Base Classes ──────────────────────────────────────────────────────────
+WC_SERVICE_BASE=BaseService
+WC_PROVIDER_BASE=BaseProvider
+WC_SCREEN_STATE_BASE=BaseStatefulWidgetState
+WC_SCREEN_BASE_CLASS=BasePageStatefulWidget
+WC_STATE_TYPE=StateType
+WC_G_STATE_NONE=StateType.none
+WC_G_STATE_LOADING=StateType.loading
+WC_G_STATE_LOADED=StateType.loaded
+WC_G_STATE_ERROR=StateType.error
+WC_G_STATE_NO_DATA=StateType.noData
+
+# ── Provider Methods ──────────────────────────────────────────────────────
+WC_M_SHOW_LOADING=showLoading
+WC_M_SHOW_LOADED=showLoaded
+WC_M_SHOW_ERROR=showError
+WC_M_SHOW_NO_DATA=showNoData
+WC_M_SET_STATE_NONE=setStateNone
+WC_M_SHOW_TOAST=showToast
+WC_M_SHOW_DIALOG=showDialog
+WC_M_SHOW_PROGRESS=showProgress
+WC_M_HIDE_PROGRESS=hideProgress
+WC_ERROR_HANDLING=DioException
+
+# ── Dialog & Toast ─────────────────────────────────────────────────────────
+WC_DIALOG_TYPE_ENUM=DialogType
+WC_TOAST_TYPE_ENUM=ToastType
+
+# ── HTTP / Network ────────────────────────────────────────────────────────
+WC_DIO_CREATE="DioOption().createDio()"
+WC_DIO_CREATE_FORM="DioOption().createDio(xFormUrl: true)"
+WC_DIO_FORM_INSTANCE=DioForm.instance
+WC_LOADING_INTERCEPTOR=LoadingInterceptor
+WC_LOADING_HUB=LoadingHub.instance
+WC_LOADING_SUPPRESS="Options(extra: {'noLoading': true})"
+
+# ── Imports ───────────────────────────────────────────────────────────────
+WC_IMPORT_BASE=package:obm_gen_with_ai/core/base/
+WC_IMPORT_COMPONENTS=package:obm_gen_with_ai/core/components/
+WC_IMPORT_CONSTANTS=package:obm_gen_with_ai/core/constants/
+WC_IMPORT_UTIL=package:obm_gen_with_ai/core/utils/util.dart
+WC_IMPORT_SERVICES=package:obm_gen_with_ai/core/base/services/
+WC_IMPORT_CORE=package:obm_gen_with_ai/core/
+WC_IMPORT_UTILITIES=package:vna_utilities/index.dart
+
+# ── UI Tokens — Colors ───────────────────────────────────────────────────
+WC_BRAND=ColorApp.brand
+WC_TEXT_DEFAULT=ColorApp.textDefault
+WC_TEXT_GREY=ColorApp.textGrey
+WC_TEXT_LIGHT_GREY=ColorApp.textLightGrey
+WC_ICON_GREY=ColorApp.iconGrey
+WC_DIVIDER=ColorApp.iconLine
+WC_SUCCESS=ColorApp.statusSuccess
+WC_WARNING=ColorApp.statusWarning
+WC_ERROR=ColorApp.statusFail
+WC_BG_LIGHT=ColorApp.colorF8FCFF
+WC_BG_CARD=ColorApp.colorF4F5F8
+
+# ── UI Tokens — Text Styles ───────────────────────────────────────────────
+WC_TEXT_STYLE_CLASS=OneUiText
+WC_TEXT_COMMON=OneUiText.common
+WC_TEXT_FOCUS=OneUiText.focusTextStyle
+WC_TEXT_LABEL=OneUiText.labelTextStyle
+WC_TEXT_LABEL_REQUIRED=OneUiText.labelTextRequiredStyle
+WC_TEXT_FIELD=OneUiText.textFieldStyle
+WC_TEXT_ERROR=OneUiText.textFieldErrorStyle
+WC_TEXT_DISABLE=OneUiText.disableTextStyle
+WC_TEXT_HINT=OneUiText.hintTextStyle
+WC_TEXT_WIDGET=OneUiText.textWidget
+
+# ── i18n ─────────────────────────────────────────────────────────────────
+WC_I18N_CLASS=AppStrings
+WC_I18N_GETTER=AppStrings
+WC_I18N_KEY_STYLE=camelCase
+WC_I18N_NO_DATA=AppStrings.commonNoData
+WC_I18N_LOADING=AppStrings.commonLoading
+
+# ── Reusable Widgets ──────────────────────────────────────────────────────
+WC_BTN_CLASS=CoreButton
+WC_SVG_HELPER=svgAsset
+WC_CONSUMER_BASE=ConsumerBase
+WC_SELECTOR_BASE=SelectorBase
+WC_PROGRESS_LOAD=ProgressLoad
+WC_EMPTY_WIDGET=EmptyListIndicator
+WC_ERROR_WIDGET=ErrorIndicator
+WC_NETWORK_IMAGE=AppNetworkImage
+
+# ── Folder Structure ──────────────────────────────────────────────────────
+WC_FEATURE_DIR=lib/features
+WC_SCREEN_FILE=_screen.dart
+WC_PROVIDER_FILE=component/_provider.dart
+WC_SERVICE_FILE=component/_service.dart
+WC_MODEL_FILE=model/_model.dart
+WC_BODY_FILE=widget/body__widget.dart
+WC_ITEM_FILE=widget/item_.dart
+
+# ── Naming Conventions ───────────────────────────────────────────────────
+WC_FILE_CASE=snake_case
+WC_CLASS_CASE=PascalCase
+WC_BOOL_PREFIX=is,show,has,can,enable
+WC_CALLBACK_PREFIX=on
+WC_ASYNC_METHOD="Future<void>"
+
+# ── Spacing & Sizing ─────────────────────────────────────────────────────
+WC_COMMON_RADIUS="BorderRadius.circular(16)"
+WC_BUTTON_RADIUS="BorderRadius.circular(8)"
+
+# ── Misc ─────────────────────────────────────────────────────────────────
+WC_FONT=Inter
+WC_SCREEN_BG=Colors.white
+WC_BASE_PROVIDER_GETTERS=isLoading,isLoaded,loadingFailed,noData
+WC_DIO_EXCEPTION=DioException
+WC_LOAD_MORE_MIXIN=ControllerLoadMoreMixin

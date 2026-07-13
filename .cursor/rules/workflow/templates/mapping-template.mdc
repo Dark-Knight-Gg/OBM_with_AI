@@ -1,0 +1,191 @@
+---
+description: Template chuẩn cho feature mapping doc. Áp dụng tự động khi tạo feature mới.
+globs: **/*_mapping.md
+alwaysApply: true
+---
+
+# 📐 Feature Mapping Template
+
+> **Feature:** `<Tên Feature>`
+> **Variant:** `<Variant nếu có>`
+> **Date:** `<YYYY-MM-DD>`
+> **Status:** Draft → Approved
+
+> **Variables:** This file uses `{{VARIABLE}}` tokens resolved from `_project_config.mdc`.
+
+---
+
+## 1. INPUTS
+
+### 1.1 SRS Reference
+
+|| Field | Value |
+|-------|-------|
+| SRS File | `<srs_path>` |
+| Export Folder | `<srs_export_folder>` |
+| Version | `<x.x.x>` |
+| Owner | `<PM Name>` |
+
+### 1.2 Figma Design
+
+|| Screen | Figma URL | Node ID |
+|--------|-----------|---------|
+| List Screen | `[URL]` | `<node-id>` |
+| Detail Screen | `[URL]` | `<node-id>` |
+
+### 1.3 User Stories
+
+```markdown
+- US-01: As a <user>, I want to <action> so that <goal>
+- US-02: ...
+```
+
+---
+
+## 2. DESIGN → CODE MAPPING
+
+### 2.1 Screen Mapping
+
+|| Figma Screen | Code File | Route |
+|--------------|-----------|-------|
+| List Screen | `list_<feature>_screen.dart` | `/list-<feature>` |
+
+### 2.2 Component Mapping
+
+|| Figma Component | Code Widget | Props |
+|-----------------|-------------|-------|
+| Header | `AppBar` trong {{SCREEN_BASE_CLASS}} | title |
+| Item Card | `item_<feature>_widget.dart` | item, onTap |
+| Empty State | `EmptyListIndicator` | message |
+| Loading | `{{CONSUMER_BASE}}` | - |
+| Error | `ErrorIndicator` | message |
+
+### 2.3 Style Mapping
+
+|| Figma Style | Code Token |
+|------------|------------|
+| Primary | `{{BRAND}}` |
+| Text/Body | `{{TEXT_COMMON}}` |
+| Text/Label | `{{TEXT_LABEL}}` |
+| Background | `{{BG_LIGHT}}` |
+| Card BG | `Colors.white` |
+| Radius | `BorderRadius.circular(15~20)` |
+
+---
+
+## 3. DATA MODELS
+
+### 3.1 Entity Mapping
+
+|| Figma Data | Model | Fields |
+|------------|-------|--------|
+| Event Item | `<Feature>Model` | id, title, description, startDate, endDate, location, imageUrl, state |
+| Response | `<Feature>Response` | data (List), status, message |
+
+### 3.2 Model Code (từ SRS/API)
+
+```dart
+class <Feature>Model {
+  final int? id;
+  final String? title;
+  final String? description;
+  // ... các field khác từ SRS
+}
+
+class <Feature>Response {
+  final List<<Feature>Model>? data;
+  final int? status;
+  final String? message;
+}
+```
+
+---
+
+## 4. API MAPPING
+
+### 4.1 Endpoint Mapping
+
+|| Action | API Endpoint | Method | Service Method |
+|--------|--------------|--------|----------------|
+| Load List | `/events` | GET | `getItems()` |
+
+### 4.2 Request/Response
+
+```json
+// Request
+GET /events?page=0&size=10000&sort=createdAt,desc
+
+// Response
+{
+  "content": [...],
+  "totalElements": 100
+}
+```
+
+---
+
+## 5. STATE MANAGEMENT
+
+```
+Screen (extends {{SCREEN_BASE_CLASS}})
+  └── Body<Feature>Widget (StatelessWidget + {{CONSUMER_BASE}})
+        └── <Feature>Provider (extends {{PROVIDER_BASE}}<<Feature>Service>)
+              ├── {{STATE_TYPE}}: {{STATE_VALUES}}
+              ├── items: List<<Feature>Model>
+              └── <Feature>Service (extends {{SERVICE_BASE}})
+                    └── Dio HTTP → endpoint
+```
+
+---
+
+## 6. VARIANT DIFFERENCES (nếu có)
+
+|| Aspect | Base | Variant |
+|--------|------|---------|
+| Title | `Events` | `Events <variant>` |
+| Bottom Bar | Có | Không có |
+| Header | Mặc định | Custom |
+
+---
+
+## 7. FILE STRUCTURE OUTPUT
+
+```
+{{FEATURES_PATH}}<feature>/
+├── <feature>_screen.dart
+├── <feature>_mapping.md  ← File này
+├── component/
+│   ├── <feature>_provider.dart
+│   └── <feature>_service.dart
+├── model/
+│   └── <feature>_model.dart
+└── widget/
+    └── body_<feature>_widget.dart
+```
+
+---
+
+## 8. IMPLEMENTATION NOTES
+
+- **Import core:** `import 'package:obm_gen_with_ai/core/';`
+- **Colors:** Dùng `{{BRAND}}`, `{{TEXT_DEFAULT}}`, `{{DIVIDER}}`
+- **Text:** Dùng `{{TEXT_STYLE_CLASS}}.*`, `{{I18N_GETTER}}`
+- **State:** Provider `extends {{PROVIDER_BASE}}`, `{{STATE_TYPE}}` values
+- **{{M_SHOW_LOADING}}/{{M_SHOW_LOADED}}/{{M_SHOW_ERROR}}/{{M_SHOW_NO_DATA}}` trong provider
+- **Dialog/Toast:** `provider.{{M_SHOW_DIALOG}}`, `provider.{{M_SHOW_TOAST}}`
+
+---
+
+## 9. REVIEW CHECKLIST
+
+- [ ] Mapping đủ SRS requirements
+- [ ] Mapping đủ Figma screens
+- [ ] API endpoints đúng theo SRS
+- [ ] Models đủ fields từ API response
+- [ ] Variant differences đã ghi rõ
+- [ ] Architecture đúng pattern (`{{PROVIDER_BASE}}`, `{{SERVICE_BASE}}`, `{{CONSUMER_BASE}}`)
+- [ ] Import paths đúng convention (`{{IMPORT_CORE}}`)
+
+---
+
+*Mapped by VNPT Workflow CLI - Auto-generated*

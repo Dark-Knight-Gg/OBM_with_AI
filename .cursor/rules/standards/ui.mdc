@@ -1,0 +1,179 @@
+---
+description: UI rules — colors, sizing, text styles, dialogs, theme. Apply to all widget files.
+globs: **/*.dart
+alwaysApply: true
+---
+
+# UI Rules — obm_gen_with_ai
+
+> Variables: See `_project_config.mdc`. Key values: `{{BRAND}}`, `{{TEXT_DEFAULT}}`, `{{TEXT_GREY}}`, `{{TEXT_LIGHT_GREY}}`, `{{DIVIDER}}`, `{{SUCCESS}}`, `{{WARNING}}`, `{{ERROR}}`, `{{BG_LIGHT}}`, `{{BG_CARD}}`, `{{TEXT_STYLE_CLASS}}`, `{{TEXT_COMMON}}`, `{{TEXT_FOCUS}}`, `{{TEXT_LABEL}}`, `{{TEXT_LABEL_REQUIRED}}`, `{{TEXT_FIELD}}`, `{{TEXT_ERROR}}`, `{{TEXT_DISABLE}}`, `{{TEXT_HINT}}`, `{{TEXT_WIDGET}}`, `{{SVG_HELPER}}`, `{{M_SHOW_DIALOG}}`, `{{M_SHOW_TOAST}}`, `{{DIALOG_TYPE_ENUM}}`, `{{DIALOG_TYPES}}`, `{{TOAST_TYPE_ENUM}}`, `{{TOAST_TYPES}}`, `{{I18N_CLASS}}`, `{{I18N_GETTER}}`, `{{FONT}}`.
+
+## NEVER (Hard Rules)
+
+| # | NEVER DO                               | INSTEAD USE                          |
+|---|----------------------------------------|--------------------------------------|
+| 1 | Hardcode hex color outside `ColorApp`  | `{{BRAND}}`, `{{TEXT_DEFAULT}}`, etc. |
+| 2 | Inline `TextStyle(...)` in widgets     | `{{TEXT_STYLE_CLASS}}.*` / `{{TEXT_WIDGET}}(...)` |
+| 3 | Hardcode display strings               | `{{I18N_GETTER}}`                    |
+| 4 | SVG via `SvgPicture.asset` directly    | `{{SVG_HELPER}}(...)`                |
+| 5 | Call `showDialog`/`showToast` from widget | `provider.{{M_SHOW_DIALOG}}/{{M_SHOW_TOAST}}` (via eventStream) |
+| 6 | Wrap body with extra loading overlay    | `{{CONSUMER_BASE}}` handles loading state  |
+
+## Colors — `ColorApp.*` (Semantic Tokens)
+
+| Token                          | Hex       | Variable in Config | Use                              |
+|--------------------------------|-----------|--------------------|----------------------------------|
+| `ColorApp.brand`              | `#0057E5` | `{{BRAND}}`        | Primary                          |
+| `ColorApp.bottomBarSelected`  | `#0057E5` | —                  | Bottom bar selected item         |
+| `ColorApp.bottomBarUnSelected`| `#1A2A45` | —                  | Bottom bar unselected item       |
+| `ColorApp.textDefault`        | `#050505` | `{{TEXT_DEFAULT}}` | Body text                        |
+| `ColorApp.textGrey`           | `#7D8798` | `{{TEXT_GREY}}`     | Secondary / caption text         |
+| `ColorApp.textLightGrey`      | `#ADB5BE` | `{{TEXT_LIGHT_GREY}}` | Hint / placeholder text        |
+| `ColorApp.iconGrey`           | `#98A0AA` | —                  | Secondary icon                   |
+| `ColorApp.iconWhite`          | `#FFFFFF` | —                  | White icon                       |
+| `ColorApp.iconLine`           | `#C9D4E4` | `{{DIVIDER}}`      | Divider / border                 |
+| `ColorApp.statusSuccess`       | `#0CBA71` | `{{SUCCESS}}`      | Success state                    |
+| `ColorApp.statusWarning`       | `#DE842F` | `{{WARNING}}`      | Warning state                    |
+| `ColorApp.statusFail`         | `#FF0000` | `{{ERROR}}`        | Error state                      |
+| `ColorApp.colorF8FCFF`       | `#F8FCFF` | `{{BG_LIGHT}}`     | Light background                 |
+| `ColorApp.colorF4F5F8`        | `#F4F5F8` | `{{BG_CARD}}`      | Card / container background      |
+
+## Spacing Scale
+
+```
+4   8   10  12  16  20  24  32  40  48
+```
+
+Use only these values for padding, margin, and `SizedBox`.
+
+## Sizing
+
+```dart
+const EdgeInsets.symmetric(horizontal: 16, vertical: 8);
+const SizedBox(height: 12);
+BorderRadius.circular(16);
+```
+
+- Always use `const` for fixed `EdgeInsets`, `SizedBox`, `BorderRadius`.
+- Common radii: `4`, `8`, `12`, `16`, `20`.
+
+## Text Styles — `{{TEXT_STYLE_CLASS}}.*`
+
+```dart
+// Predefined styles
+Text('Hello', style: {{TEXT_COMMON}});                        // 14, w400, {{TEXT_DEFAULT}}
+Text('Required', style: {{TEXT_LABEL_REQUIRED}});           // 14, w400, {{ERROR}}, bold
+Text('Hint', style: {{TEXT_HINT}});                          // 14, w600, {{TEXT_LIGHT_GREY}}
+Text('Disabled', style: {{TEXT_DISABLE}});                    // 14, w400, {{TEXT_GREY}}
+
+// Factory widget
+{{TEXT_WIDGET}}(
+  title: 'Title',
+  fontSize: 16,
+  fontWeight: FontWeight.w600,
+  color: {{BRAND}},
+  maxLines: 2,
+  overflow: TextOverflow.ellipsis,
+  textAlign: TextAlign.center,
+);
+
+// Span builder
+{{TEXT_STYLE_CLASS}}.textSpanWidget(
+  title: 'bold span',
+  fontSize: 14,
+  fontWeight: FontWeight.w600,
+  color: {{TEXT_DEFAULT}},
+);
+
+// Per-weight style builders
+{{TEXT_STYLE_CLASS}}().getRegularStyle(fontSize: 14, color: Colors.black);
+{{TEXT_STYLE_CLASS}}().getMediumStyle(fontSize: 14, color: Colors.black);
+{{TEXT_STYLE_CLASS}}().getSemiBoldStyle(fontSize: 14, color: Colors.black);
+{{TEXT_STYLE_CLASS}}().getBoldStyle(fontSize: 14, color: Colors.black);
+{{TEXT_STYLE_CLASS}}().getLightStyle(fontSize: 14, color: Colors.black);
+```
+
+## Card / Container Pattern
+
+```dart
+Container(
+  decoration: BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(16),
+    border: Border.all(color: {{DIVIDER}}),
+  ),
+  child: ...,
+)
+```
+
+## Dialogs — Triggered from Provider
+
+```dart
+// WRONG — called directly from widget
+showDialog(context: context, builder: (_) => AlertDialog(...));
+
+// CORRECT — dispatched via eventStream
+provider.{{M_SHOW_DIALOG}}(
+  type: {{DIALOG_TYPE_ENUM}}.success,
+  title: {{I18N_CLASS}}.notification,
+  content: {{I18N_CLASS}}.downloadDataSuccess,
+  onActionCallback: (action) {
+    if (action == DialogActionType.confirm) { ... }
+  },
+);
+```
+
+`{{DIALOG_TYPES}}`
+
+## Toast
+
+```dart
+provider.{{M_SHOW_TOAST}}(
+  {{I18N_CLASS}}.downloadDataFail,
+  type: {{TOAST_TYPE_ENUM}}.error,  // {{TOAST_TYPES}}
+  duration: const Duration(seconds: 2),
+);
+```
+
+## Theme & Font
+
+- **Font: `{{FONT}}`** (`FontConstants.fontFamily`).
+- Default `Scaffold.backgroundColor`: `Colors.white`.
+- `TextScaler.noScaling` not yet globally enforced (TODO: add to root app).
+
+## Localization
+
+- Package: `easy_localization`.
+- Files: `{{I18N_FILE_PATTERN}}`.
+- Access via `{{I18N_CLASS}}` class (`lib/core/constants/app_strings.dart`):
+
+```dart
+{{I18N_CLASS}}.notification                    // → "Thông báo"
+{{I18N_CLASS}}.warningNotConnectInternet       // → "Không thể kết nối..."
+{{I18N_CLASS}}.thangChiCo30ngay(5)          // → "Tháng 5 chỉ có 30 ngày" (namedArgs)
+```
+
+- Key format: `{{I18N_KEY_STYLE}}` — NO `{{NO_LOCALE_KEYS}}` / `{{NO_PREFIX}}` convention.
+- When adding a new string: add to all 4 JSON files + a getter in `{{I18N_CLASS}}`.
+
+## DO / DON'T
+
+| DO                                               | DON'T                                             |
+|--------------------------------------------------|---------------------------------------------------|
+| `{{BRAND}}`                                    | `Color(0xFF0057E5)`                               |
+| `{{TEXT_STYLE_CLASS}}.common`                   | `TextStyle(fontSize: 14, color: ...)` inline      |
+| `{{TEXT_WIDGET}}(title: {{I18N_GETTER}})` | `Text({{I18N_GETTER}}, style: TextStyle(...))`   |
+| `{{I18N_GETTER}}`                              | `'Thông báo'`                                     |
+| `{{SVG_HELPER}}('assets/images/ic_xxx.svg', width: 24)` | `SvgPicture.asset(...)` directly            |
+| `provider.{{M_SHOW_DIALOG}}(type: {{DIALOG_TYPE_ENUM}}.error, ...)` | `showDialog(context: context, builder: ...)` |
+| `provider.{{M_SHOW_TOAST}}(...)` | `FToast().showToast(...)` directly |
+
+## Review Checklist
+
+- [ ] No hex literals outside `ColorApp`.
+- [ ] No inline `TextStyle(...)` → use `{{TEXT_STYLE_CLASS}}.*`.
+- [ ] All user-facing strings via `{{I18N_GETTER}}`.
+- [ ] `EdgeInsets`/`SizedBox` are `const`.
+- [ ] Padding/margin follow the spacing scale.
+- [ ] SVG loaded via `{{SVG_HELPER}}()`.
+- [ ] Dialog/Toast triggered from provider, not from widget.

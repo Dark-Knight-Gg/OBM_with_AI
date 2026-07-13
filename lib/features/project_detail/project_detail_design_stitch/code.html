@@ -1,0 +1,280 @@
+<!DOCTYPE html><html class="light" lang="vi"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Chi tiết dự án - DAS OBM</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&amp;family=JetBrains+Mono&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary": "#ffffff",
+                        "on-background": "#191c1e",
+                        "on-primary-container": "#fdfcff",
+                        "surface-dim": "#d8dadc",
+                        "secondary": "#00677f",
+                        "on-tertiary-fixed-variant": "#064490",
+                        "on-primary-fixed-variant": "#00497c",
+                        "tertiary-fixed": "#d8e2ff",
+                        "primary-container": "#0078c7",
+                        "surface": "#f7f9fb",
+                        "on-surface-variant": "#404751",
+                        "surface-container-highest": "#e0e3e5",
+                        "on-surface": "#191c1e",
+                        "inverse-on-surface": "#eff1f3",
+                        "surface-tint": "#0061a2",
+                        "secondary-fixed-dim": "#4ad6ff",
+                        "surface-bright": "#f7f9fb",
+                        "secondary-fixed": "#b6eaff",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#2d3133",
+                        "surface-container": "#eceef0",
+                        "outline-variant": "#c0c7d3",
+                        "tertiary-container": "#4773c2",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-container": "#fefcff",
+                        "inverse-primary": "#9dcaff",
+                        "primary-fixed-dim": "#9dcaff",
+                        "primary": "#005f9e",
+                        "surface-container-low": "#f2f4f6",
+                        "on-primary-fixed": "#001d36",
+                        "background": "#f7f9fb",
+                        "on-tertiary-fixed": "#001a40",
+                        "on-secondary-container": "#00586d",
+                        "surface-variant": "#e0e3e5",
+                        "on-error-container": "#93000a",
+                        "tertiary": "#2a5aa7",
+                        "error": "#ba1a1a",
+                        "surface-container-high": "#e6e8ea",
+                        "secondary-container": "#35d4ff",
+                        "primary-fixed": "#d1e4ff",
+                        "tertiary-fixed-dim": "#acc7ff",
+                        "error-container": "#ffdad6",
+                        "on-tertiary": "#ffffff",
+                        "outline": "#707882",
+                        "on-secondary-fixed": "#001f28",
+                        "on-secondary-fixed-variant": "#004e60",
+                        "surface-container-lowest": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter-md": "16px",
+                        "unit": "4px",
+                        "stack-sm": "8px",
+                        "container-padding": "40px",
+                        "stack-md": "24px",
+                        "stack-lg": "48px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-bold": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "mono-sm": ["JetBrains Mono"],
+                        "display-lg": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", {"lineHeight": "1.2", "fontWeight": "500"}],
+                        "body-md": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "label-bold": ["14px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "700"}],
+                        "headline-lg": ["30px", {"lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "1.3", "fontWeight": "700"}],
+                        "mono-sm": ["12px", {"lineHeight": "1.2", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "body-lg": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #f7f9fb;
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .shadow-level-1 {
+            box-shadow: 0px 10px 40px rgba(0, 0, 0, 0.08), 0px 2px 10px rgba(0, 0, 0, 0.04);
+        }
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .collapsible-content.active {
+            max-height: 2000px;
+        }
+        .rotate-icon {
+            transition: transform 0.3s ease;
+        }
+        .rotate-icon.active {
+            transform: rotate(180deg);
+        }
+        .status-badge {
+            background-color: #2185d5;
+            color: white;
+            padding: 2px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .action-btn-outline {
+            border: 1px solid #c0c7d3;
+            color: #2185d5;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: white;
+        }
+        .action-btn-solid {
+            background-color: #fbbc05;
+            color: #191c1e;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body class="text-on-surface">
+<!-- Header Section (Prominent Project Name + Actions) -->
+<header class="bg-surface-container-lowest sticky top-0 z-50 border-b border-outline-variant/30"><div class="flex items-center gap-4 h-14 px-4 bg-surface-container-lowest">
+<button class="flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-on-surface">arrow_back</span>
+</button>
+<h1 class="font-headline-md text-[20px] text-on-surface font-bold">Chi tiết dự án</h1>
+</div></header>
+<main class="p-4 space-y-4"><section class="bg-surface-container-lowest px-4 py-4 border-b border-outline-variant/30 flex flex-wrap items-center gap-2 mb-4">
+<h2 class="font-bold text-[18px] text-on-surface">
+<span class="text-[#d81b60]">NENTANGCCVCQG</span> · Nền tảng Công chức vién chức Quốc gia
+    </h2>
+<span class="bg-[#1a73e8] text-white px-3 py-1 rounded text-[12px] font-bold">Đang thực hiện</span>
+</section>
+<!-- Section 1: Thông tin chung -->
+<section class="bg-surface-container-lowest rounded-lg shadow-sm border border-outline-variant overflow-hidden">
+<button class="w-full flex items-center justify-between px-4 py-3 bg-primary-container/10 border-b border-outline-variant/30" onclick="toggleCollapse('info-general', this)">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">info</span>
+<h3 class="font-label-bold text-on-surface text-[15px]">Thông tin chung <span class="text-on-surface-variant font-normal text-[13px]">(kế thừa từ cơ hội)</span></h3>
+</div>
+<span class="material-symbols-outlined rotate-icon text-outline active">expand_more</span>
+</button>
+<div class="collapsible-content active" id="info-general">
+<div class="p-4 grid grid-cols-1 gap-y-4">
+<div class="grid grid-cols-2">
+<p class="text-on-surface-variant text-body-md font-medium">Khách hàng</p>
+<p class="text-on-surface text-body-md">Bộ Nội Vụ</p>
+</div>
+<div class="grid grid-cols-2">
+<p class="text-on-surface-variant text-body-md font-medium">Đơn vị chủ trì</p>
+<p class="text-on-surface text-body-md">Line Công chức viên chức</p>
+</div>
+<div class="grid grid-cols-2">
+<p class="text-on-surface-variant text-body-md font-medium">Quản lý dự án (PM)</p>
+<p class="text-outline text-body-md">—</p>
+</div>
+<div class="grid grid-cols-2">
+<p class="text-on-surface-variant text-body-md font-medium">Loại SP/DV</p>
+<p class="text-on-surface text-body-md">Công chức viên chức</p>
+</div>
+<div class="grid grid-cols-2">
+<p class="text-on-surface-variant text-body-md font-medium">Lĩnh vực</p>
+<p class="text-on-surface text-body-md">Chính phủ điện tử</p>
+</div>
+<div class="grid grid-cols-1 space-y-1">
+<div class="grid grid-cols-2">
+<p class="text-on-surface-variant text-body-md font-medium">Mã Jira Project</p>
+<p class="text-outline text-body-md">—</p>
+</div>
+<p class="text-[11px] text-outline italic">Tiến độ/công việc theo dõi qua Jira (cơ hội nguồn).</p>
+</div>
+<div class="grid grid-cols-2">
+<p class="text-on-surface-variant text-body-md font-medium">Ngày bắt đầu</p>
+<p class="text-on-surface text-body-md">17/06/2026</p>
+</div>
+<div class="grid grid-cols-2">
+<p class="text-on-surface-variant text-body-md font-medium">Ngày kết thúc</p>
+<p class="text-outline text-body-md">—</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 2: Giá trị (đồng) -->
+<section class="bg-surface-container-lowest rounded-lg shadow-sm border border-outline-variant overflow-hidden">
+<button class="w-full flex items-center justify-between px-4 py-3 bg-primary-container/10 border-b border-outline-variant/30" onclick="toggleCollapse('info-value', this)">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">payments</span>
+<h3 class="font-label-bold text-on-surface text-[15px]">Giá trị (đồng)</h3>
+</div>
+<span class="material-symbols-outlined rotate-icon text-outline active">expand_more</span>
+</button>
+<div class="collapsible-content active" id="info-value">
+<div class="p-4 space-y-4">
+<div class="flex justify-between items-center">
+<p class="text-on-surface-variant text-body-md font-medium">Tổng mức dự kiến</p>
+<p class="text-[#2e7d32] font-bold text-body-lg">6,000,000,000 đ</p>
+</div>
+<div class="flex justify-between items-center">
+<p class="text-on-surface-variant text-body-md font-medium">Forecast</p>
+<p class="text-primary font-bold text-body-lg">6,000,000,000 đ</p>
+</div>
+<div class="pt-2">
+<label class="text-on-surface-variant text-[13px] font-medium mb-1 block">Ghi chú:</label>
+<div class="w-full min-h-[60px] p-3 bg-surface-container-low border border-outline-variant rounded text-outline text-body-md">
+                            —
+                        </div>
+</div>
+</div>
+</div>
+</section><div class="flex justify-end px-4 py-2"><button class="flex items-center gap-1 text-[13px] text-primary border border-primary px-3 py-1.5 rounded-md hover:bg-primary/5 transition-colors"><span class="material-symbols-outlined text-[18px]">edit_note</span>Quản lý ở cơ hội</button></div>
+<!-- Section 3: Giá trị & Doanh thu theo kỳ -->
+
+</main>
+<script>
+        function toggleCollapse(id, button) {
+            const content = document.getElementById(id);
+            const icon = button.querySelector('.rotate-icon');
+            
+            if (content.classList.contains('active')) {
+                content.classList.remove('active');
+                icon.classList.remove('active');
+            } else {
+                content.classList.add('active');
+                icon.classList.add('active');
+            }
+        }
+
+        // Micro-interactions
+        document.querySelectorAll('button').forEach(elem => {
+            elem.addEventListener('click', function() {
+                this.classList.add('scale-95');
+                setTimeout(() => this.classList.remove('scale-95'), 150);
+            });
+        });
+    </script>
+
+
+</body></html>

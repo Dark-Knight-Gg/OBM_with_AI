@@ -1,0 +1,185 @@
+---
+description: Reusable widgets and components shipped from obm_gen_with_ai core. ALWAYS check here before creating a new widget.
+globs: **/*.dart
+alwaysApply: true
+---
+
+# Reusable Widgets — obm_gen_with_ai
+
+> Import path: `{{IMPORT_COMPONENTS}}`
+> Variables: See `_project_config.mdc`. Key values: `{{BTN_CLASS}}`, `{{TEXT_STYLE_CLASS}}`, `{{TEXT_WIDGET}}`, `{{SVG_HELPER}}`, `{{CONSUMER_BASE}}`, `{{SELECTOR_BASE}}`, `{{PROGRESS_LOAD}}`, `{{M_SHOW_DIALOG}}`, `{{M_SHOW_TOAST}}`, `{{DIALOG_TYPE_ENUM}}`, `{{TOAST_TYPE_ENUM}}`, `{{I18N_CLASS}}`, `{{BRAND}}`, `{{TEXT_DEFAULT}}`, `{{TEXT_LIGHT_GREY}}`, `{{DIVIDER}}`, `{{ERROR}}`.
+
+## Golden Rule
+
+> **Check this list and `{{IMPORT_COMPONENTS}}` before writing any widget.**
+> If it already exists, reuse it. Consistency + less surface area for bugs.
+
+## {{BTN_CLASS}}
+
+File: `lib/core/components/core_button.dart`
+
+```dart
+{{BTN_CLASS}}(
+  text: {{I18N_CLASS}}.save,                  // default ""
+  onPress: () {},                           // required
+  backgroundColor: {{BRAND}},               // default Colors.blueAccent
+  textColor: Colors.white,
+  width: double.infinity,                   // optional
+  height: 48,                              // optional
+  borderRadius: BorderRadius.circular(8),    // default: circular(4) in code + extra circular(16) wrapper
+  borderWidth: 1.0,
+  colorBorder: Colors.transparent,
+  padding: const EdgeInsets.all(10),        // default
+  margin: const EdgeInsets.all(0),
+  isLeftIcon: false,
+  isRightIcon: false,
+  iconLeft: Icons.add,
+  iconRight: Icons.arrow_forward,
+  sizeIcon: 15,
+  colorIcon: Colors.white,
+  marginLeftIcon: 8,
+  styleText: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+  maxLineTextButton: 1,
+  alignmentText: Alignment.center,
+  shadowColor: Colors.transparent,
+  elevation: const WidgetStatePropertyAll(0),
+)
+```
+
+## {{TEXT_STYLE_CLASS}} (file `core_text.dart`)
+
+```dart
+// Predefined styles
+Text('Hello', style: {{TEXT_STYLE_CLASS}}.common);
+Text('Required', style: {{TEXT_STYLE_CLASS}}.labelTextRequiredStyle);
+Text('Hint', style: {{TEXT_STYLE_CLASS}}.hintTextStyle);
+Text('Disabled', style: {{TEXT_STYLE_CLASS}}.disableTextStyle);
+
+// Factory widget
+{{TEXT_WIDGET}}(
+  title: 'Title',
+  fontSize: 16,
+  fontWeight: FontWeight.w600,
+  color: {{BRAND}},
+  maxLines: 2,
+  overflow: TextOverflow.ellipsis,
+  textAlign: TextAlign.center,
+);
+
+// Per-weight style builders
+{{TEXT_STYLE_CLASS}}().getRegularStyle(fontSize: 14, color: Colors.black);
+{{TEXT_STYLE_CLASS}}().getMediumStyle(fontSize: 14, color: Colors.black);
+{{TEXT_STYLE_CLASS}}().getSemiBoldStyle(fontSize: 14, color: Colors.black);
+{{TEXT_STYLE_CLASS}}().getBoldStyle(fontSize: 14, color: Colors.black);
+{{TEXT_STYLE_CLASS}}().getLightStyle(fontSize: 14, color: Colors.black);
+```
+
+## {{SVG_HELPER}}()
+
+File: `lib/core/components/image.dart`
+
+```dart
+{{SVG_HELPER}}(
+  'assets/images/ic_success_dialog.svg',
+  width: 120,
+  height: 120,
+  color: {{BRAND}},
+  package: 'modulevnelife',    // optional, for assets from other packages
+  active: true,               // false → grayscale
+)
+```
+
+Always use `{{SVG_HELPER}}()` for local SVG. Never call `SvgPicture.asset` directly.
+
+## State Consumers
+
+```dart
+// PREFERRED — auto-switches on {{STATE_TYPE}}
+{{CONSUMER_BASE}}<XxxService, XxxProvider>(
+  contextParent: context,
+  onRepositoryLoading: (_) =>
+      const Center(child: CircularProgressIndicator()),
+  onRepositorySuccess: (repo) => _buildList(repo as XxxProvider),
+  onRepositoryError: (repo) => _buildError(repo as XxxProvider),
+  onRepositoryNoData: (repo) => const _EmptyView(),
+)
+
+// ONLY when watching a specific field
+{{SELECTOR_BASE}}<XxxProvider>(
+  selector: (ctx, p) => p.title,
+  contextParrent: context,
+  onRepository: (ctx, repo) =>
+      Text((repo as XxxProvider).title),
+)
+
+// Low-level
+context.select<XxxProvider, int>((p) => p.items.length);
+context.read<XxxProvider>().fetchItems();
+```
+
+## Dialog — From Provider
+
+```dart
+provider.{{M_SHOW_DIALOG}}(
+  type: {{DIALOG_TYPE_ENUM}}.success,      // {{DIALOG_TYPES}}
+  title: {{I18N_CLASS}}.notification,
+  content: {{I18N_CLASS}}.downloadDataSuccess,
+  confirmText: {{I18N_CLASS}}.xacNhan,     // for type=confirm
+  closeText: {{I18N_CLASS}}.close,        // for all types
+  dismissible: false,
+  expandedActions: false,
+  onActionCallback: (action) {             // DialogActionType.close | confirm
+    if (action == DialogActionType.confirm) { ... }
+  },
+);
+```
+
+## Toast
+
+```dart
+provider.{{M_SHOW_TOAST}}(
+  {{I18N_CLASS}}.downloadDataSuccess,
+  type: {{TOAST_TYPE_ENUM}}.success,        // {{TOAST_TYPES}}
+  duration: const Duration(seconds: 2),
+);
+```
+
+## Progress Overlay
+
+```dart
+provider.showProgress();   // overlay dialog
+provider.hideProgress();
+```
+
+## Constants & Utils
+
+```dart
+import 'package:obm_gen_with_ai/core/constants/color_app.dart';
+import 'package:obm_gen_with_ai/core/constants/app_strings.dart';
+import 'package:obm_gen_with_ai/core/constants/constants.dart';
+import 'package:obm_gen_with_ai/core/utils/util.dart';
+
+ColorApp.brand                  // = {{BRAND}}
+{{I18N_CLASS}}.notification    // = {{I18N_GETTER}}
+Constants.empty                // = ""
+Constants.zero                 // = 0
+Util.orEmpty(someDynamic)      // returns "" if null or not a String
+```
+
+## When to Create a New Widget
+
+Create a new widget only when **all 3 conditions are met**:
+
+1. No existing widget in this list or `{{IMPORT_COMPONENTS}}` fulfills the need.
+2. The widget is used in **2 or more places**.
+3. The widget has a **clear API** (props documented, no leaked external state).
+
+If used only once, keep it inline in the body widget.
+
+## Review Checklist for New Widget in PR
+
+- [ ] Searched `{{IMPORT_COMPONENTS}}` first.
+- [ ] Used in at least 2 places.
+- [ ] Props are clearly named and documented.
+- [ ] Uses `{{BRAND}}`, `{{TEXT_STYLE_CLASS}}.*`, `{{I18N_GETTER}}`.
+- [ ] If screen-level reusable component → consider placing in `{{IMPORT_COMPONENTS}}` for future reuse.

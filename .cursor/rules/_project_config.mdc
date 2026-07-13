@@ -1,0 +1,212 @@
+---
+description: Project configuration — UPDATE THIS FILE ONLY when moving to a new project. All other rules use {{VARIABLE}} tokens resolved from here.
+globs:
+alwaysApply: false
+priority: highest
+---
+
+# Project Config — obm_gen_with_ai
+
+> **Shell scripts**: source `.workflow_config` (`.env` format) at project root instead of parsing this file.
+> This file is for **agent context** (`{{VARIABLE}}` token resolution).
+> When adding variables: update **BOTH** `.workflow_config` and this file.
+
+---
+
+## Metadata
+
+| Key | Value |
+|---|---|
+| `PROJECT_NAME` | `obm_gen_with_ai` |
+| `PACKAGE_IMPORT` | `package:obm_gen_with_ai/` |
+| `CORE_PATH` | `lib/core/` |
+| `FEATURES_PATH` | `lib/features/` |
+| `ASSETS_PATH` | `lib/assets/` |
+
+---
+
+## Base Classes
+
+| Variable | Value | Example |
+|---|---|---|
+| `{{SERVICE_BASE}}` | `BaseService` | `class XxxService extends BaseService` |
+| `{{PROVIDER_BASE}}` | `BaseProvider<S>` | `class XxxProvider extends BaseProvider<XxxService>` |
+| `{{SCREEN_STATE_BASE}}` | `BaseStatefulWidgetState<T, S, P>` | `class _XxxScreenState extends BaseStatefulWidgetState<XxxScreen, XxxService, XxxProvider>` |
+| `{{SCREEN_BASE_CLASS}}` | `BasePageStatefulWidget` | `class XxxScreen extends BasePageStatefulWidget` |
+| `{{STATE_TYPE}}` | `StateType` | `StateType.loading`, `StateType.loaded` |
+| `{{STATE_VALUES}}` | `none \| loading \| error \| noData \| loaded` | state machine values |
+| `{{G_STATE_NONE}}` | `StateType.none` | initial state |
+| `{{G_STATE_LOADING}}` | `StateType.loading` | loading state |
+| `{{G_STATE_LOADED}}` | `StateType.loaded` | success state |
+| `{{G_STATE_ERROR}}` | `StateType.error` | error state |
+| `{{G_STATE_NO_DATA}}` | `StateType.noData` | empty state |
+
+---
+
+## Provider Methods (State Transitions)
+
+| Variable | Value | Description |
+|---|---|---|
+| `{{M_SHOW_LOADING}}` | `showLoading()` | Transition to loading state |
+| `{{M_SHOW_LOADED}}` | `showLoaded()` | Transition to loaded state |
+| `{{M_SHOW_ERROR}}` | `showError()` | Transition to error state |
+| `{{M_SHOW_NO_DATA}}` | `showNoData()` | Transition to noData state |
+| `{{M_SET_STATE_NONE}}` | `setStateNone()` | Reset to none state |
+| `{{M_SHOW_TOAST}}` | `showToast(msg, type:, duration:)` | Show toast via eventStream |
+| `{{M_SHOW_DIALOG}}` | `showDialog(type:, title:, content:, onActionCallback:)` | Show dialog via eventStream |
+| `{{M_SHOW_PROGRESS}}` | `showProgress()` | Show loading overlay |
+| `{{M_HIDE_PROGRESS}}` | `hideProgress()` | Dismiss loading overlay |
+
+---
+
+## Dialog & Toast
+
+| Variable | Value | Used in |
+|---|---|---|
+| `{{DIALOG_TYPE_ENUM}}` | `DialogType` | provider.mdc, ui.mdc, widgets.mdc |
+| `{{DIALOG_TYPES}}` | `none \| success \| warring \| error \| confirm \| customForm` | code examples |
+| `{{DIALOG_ACTION_ENUM}}` | `DialogActionType` | code examples |
+| `{{DIALOG_ACTION_VALUES}}` | `close \| confirm` | code examples |
+| `{{TOAST_TYPE_ENUM}}` | `ToastType` | provider.mdc, ui.mdc |
+| `{{TOAST_TYPES}}` | `normal \| success \| error \| warning` | code examples |
+
+---
+
+## HTTP / Network
+
+| Variable | Value | Description |
+|---|---|---|
+| `{{DIO_CREATE}}` | `DioOption().createDio()` | JSON dio client |
+| `{{DIO_CREATE_FORM}}` | `DioOption().createDio(xFormUrl: true)` | Form-urlencoded dio client |
+| `{{DIO_FORM_INSTANCE}}` | `DioForm.instance` | Singleton with pre-wired interceptors |
+| `{{LOADING_INTERCEPTOR}}` | `LoadingInterceptor` | Request counter interceptor |
+| `{{LOADING_HUB}}` | `LoadingHub.instance` | Global loading counter |
+| `{{LOADING_SUPPRESS}}` | `Options(extra: {'noLoading': true})` | Suppress per-call loading |
+| `{{ERROR_HANDLING}}` | `DioException` | Catch in provider |
+| `{{ERROR_MSG}}` | `e.message ?? AppStrings.warningNotConnectInternet` | Error message from DioException |
+
+---
+
+## Imports
+
+| Variable | Value | Used in |
+|---|---|---|
+| `{{IMPORT_BASE}}` | `import 'package:obm_gen_with_ai/core/base/'` | base classes |
+| `{{IMPORT_COMPONENTS}}` | `import 'package:obm_gen_with_ai/core/components/'` | widgets, buttons |
+| `{{IMPORT_CONSTANTS}}` | `import 'package:obm_gen_with_ai/core/constants/'` | colors, strings |
+| `{{IMPORT_UTIL}}` | `import 'package:obm_gen_with_ai/core/utils/util.dart';` | util helpers |
+| `{{IMPORT_SERVICES}}` | `import 'package:obm_gen_with_ai/core/base/services/'` | base service files |
+| `{{IMPORT_CORE}}` | `import 'package:obm_gen_with_ai/core/'` | core umbrella |
+
+---
+
+## UI Tokens — Colors
+
+| Variable | Value | Hex | Used in |
+|---|---|---|---|
+| `{{BRAND}}` | `ColorApp.brand` | `#0057E5` | ui.mdc, widgets.mdc |
+| `{{TEXT_DEFAULT}}` | `ColorApp.textDefault` | `#050505` | ui.mdc |
+| `{{TEXT_GREY}}` | `ColorApp.textGrey` | `#7D8798` | ui.mdc |
+| `{{TEXT_LIGHT_GREY}}` | `ColorApp.textLightGrey` | `#ADB5BE` | ui.mdc |
+| `{{ICON_GREY}}` | `ColorApp.iconGrey` | `#98A0AA` | ui.mdc |
+| `{{DIVIDER}}` | `ColorApp.iconLine` | `#C9D4E4` | ui.mdc |
+| `{{SUCCESS}}` | `ColorApp.statusSuccess` | `#0CBA71` | ui.mdc |
+| `{{WARNING}}` | `ColorApp.statusWarning` | `#DE842F` | ui.mdc |
+| `{{ERROR}}` | `ColorApp.statusFail` | `#FF0000` | ui.mdc |
+| `{{BG_LIGHT}}` | `ColorApp.colorF8FCFF` | `#F8FCFF` | ui.mdc |
+| `{{BG_CARD}}` | `ColorApp.colorF4F5F8` | `#F4F5F8` | ui.mdc |
+
+---
+
+## UI Tokens — Text Styles
+
+| Variable | Value | File | Used in |
+|---|---|---|---|
+| `{{TEXT_STYLE_CLASS}}` | `OneUiText` | `core/components/core_text.dart` | ui.mdc, widgets.mdc |
+| `{{TEXT_COMMON}}` | `OneUiText.common` | text style | ui.mdc |
+| `{{TEXT_FOCUS}}` | `OneUiText.focusTextStyle` | text style | ui.mdc |
+| `{{TEXT_LABEL}}` | `OneUiText.labelTextStyle` | text style | ui.mdc |
+| `{{TEXT_LABEL_REQUIRED}}` | `OneUiText.labelTextRequiredStyle` | text style | ui.mdc |
+| `{{TEXT_FIELD}}` | `OneUiText.textFieldStyle` | text style | ui.mdc |
+| `{{TEXT_ERROR}}` | `OneUiText.textFieldErrorStyle` | text style | ui.mdc |
+| `{{TEXT_DISABLE}}` | `OneUiText.disableTextStyle` | text style | ui.mdc |
+| `{{TEXT_HINT}}` | `OneUiText.hintTextStyle` | text style | ui.mdc |
+| `{{TEXT_WIDGET}}` | `OneUiText.textWidget(title:, ...)` | factory widget | widgets.mdc |
+
+---
+
+## i18n
+
+| Variable | Value | Used in |
+|---|---|---|
+| `{{I18N_CLASS}}` | `AppStrings` | ui.mdc, naming.mdc |
+| `{{I18N_GETTER}}` | `AppStrings.xxx` | code examples |
+| `{{I18N_KEY_STYLE}}` | `flat camelCase` | naming convention |
+| `{{NO_LOCALE_KEYS}}` | `LocaleKeys` | NEVER use — project uses AppStrings |
+| `{{NO_PREFIX}}` | `KeyIOffice_*`, `KeyVNAFamily_*` | NEVER use — project uses flat keys |
+| `{{I18N_FILE_PATTERN}}` | `lib/assets/translations/{vi,en,vi-VN,en-US}.json` | naming.mdc |
+
+---
+
+## Reusable Widgets
+
+| Variable | Value | File | Used in |
+|---|---|---|---|
+| `{{BTN_CLASS}}` | `CoreButton` | `core/components/core_button.dart` | widgets.mdc |
+| `{{SVG_HELPER}}` | `svgAsset()` | `core/components/image.dart` | widgets.mdc |
+| `{{CONSUMER_BASE}}` | `ConsumerBase<S, P>` | `core/base/selector_base.dart` | widgets.mdc, performance.mdc |
+| `{{SELECTOR_BASE}}` | `SelectorBase<P>` | `core/base/selector_base.dart` | widgets.mdc, performance.mdc |
+| `{{PROGRESS_LOAD}}` | `ProgressLoad` | `core/base/selector_base.dart` | widgets.mdc |
+| `{{EMPTY_WIDGET}}` | `EmptyListIndicator` | (needs verification) | widgets.mdc |
+| `{{ERROR_WIDGET}}` | `ErrorIndicator` | (needs verification) | widgets.mdc |
+| `{{NETWORK_IMAGE}}` | `AppNetworkImage` | (needs verification) | widgets.mdc |
+
+---
+
+## Folder Structure
+
+| Variable | Value | Used in |
+|---|---|---|
+| `{{FEATURE_DIR}}` | `lib/features/<feature_name>/` | architecture.mdc |
+| `{{SCREEN_FILE}}` | `<feature_name>_screen.dart` | architecture.mdc |
+| `{{PROVIDER_FILE}}` | `component/<feature_name>_provider.dart` | architecture.mdc |
+| `{{SERVICE_FILE}}` | `component/<feature_name>_service.dart` | architecture.mdc |
+| `{{MODEL_FILE}}` | `model/<feature_name>_model.dart` | architecture.mdc |
+| `{{BODY_FILE}}` | `widget/body_<feature_name>_widget.dart` | architecture.mdc |
+| `{{ITEM_FILE}}` | `widget/item_<entity>.dart` | architecture.mdc |
+
+---
+
+## Naming Conventions
+
+| Variable | Value | Used in |
+|---|---|---|
+| `{{FILE_CASE}}` | `snake_case` | naming.mdc |
+| `{{CLASS_CASE}}` | `PascalCase` | naming.mdc |
+| `{{BOOL_PREFIX}}` | `isXxx`, `showXxx`, `hasXxx`, `canXxx`, `enableXxx` | naming.mdc |
+| `{{CALLBACK_PREFIX}}` | `onXxx` | naming.mdc |
+| `{{ASYNC_METHOD}}` | `Future<void>` | naming.mdc |
+
+---
+
+## Spacing & Sizing
+
+| Variable | Value | Used in |
+|---|---|---|
+| `{{SPACING_UNIT}}` | `4px scale` | ui.mdc |
+| `{{COMMON_RADIUS}}` | `BorderRadius.circular(16)` | ui.mdc |
+| `{{BUTTON_RADIUS}}` | `BorderRadius.circular(8)` | ui.mdc |
+
+---
+
+## Misc
+
+| Variable | Value | Used in |
+|---|---|---|
+| `{{FONT}}` | `Inter` | ui.mdc |
+| `{{SCREEN_BG}}` | `Colors.white` | ui.mdc |
+| `{{BASE_PROVIDER_GETTERS}}` | `isLoading, isLoaded, loadingFailed, noData` | provider.mdc |
+| `{{DIO_EXCEPTION}}` | `DioException` | api.mdc, provider.mdc |
+| `{{LOAD_MORE_MIXIN}}` | `ControllerLoadMoreMixin` | provider.mdc |
+| `{{ON_START_HOOK}}` | `onStart()` override in provider | performance.mdc |
+| `{{INIT_EVENT_LISTENER}}` | `initEventListener(context)` in screen state | performance.mdc |

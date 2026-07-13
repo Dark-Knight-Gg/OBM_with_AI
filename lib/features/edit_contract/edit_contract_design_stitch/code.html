@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+
+<html class="light" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Thêm mới hợp đồng</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&amp;family=JetBrains+Mono&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#2185d5",
+                        "on-primary": "#ffffff",
+                        "secondary": "#00677f",
+                        "background": "#f7f9fb",
+                        "surface": "#f7f9fb",
+                        "on-surface": "#191c1e",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#f2f4f6",
+                        "surface-container": "#eceef0",
+                        "outline": "#707882",
+                        "outline-variant": "#c0c7d3",
+                        "error": "#ba1a1a",
+                        "card-header": "#e2f0fb" /* 35% lighter/faded brand blue approximation */
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.5rem", /* ROUND_EIGHT approximation */
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "gutter-md": "16px",
+                        "container-padding": "40px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "label-bold": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #f7f9fb;
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .card-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .card-content.expanded {
+            max-height: 2500px;
+        }
+        .rotate-icon {
+            transition: transform 0.3s ease;
+        }
+        .expanded-btn .rotate-icon {
+            transform: rotate(180deg);
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #2185d5 !important;
+            box-shadow: 0 0 0 1px #2185d5 !important;
+        }
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23404751'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.25rem;
+            padding-right: 2.5rem !important;
+        }
+    </style>
+</head>
+<body class="pb-24">
+<!-- Top AppBar -->
+<header class="w-full sticky top-0 z-50 bg-white shadow-sm h-16 flex items-center justify-between px-gutter-md">
+<div class="flex items-center gap-3">
+<button class="w-10 h-10 flex items-center justify-center rounded-full active:scale-95 duration-150">
+<span class="material-symbols-outlined text-on-surface">arrow_back</span>
+</button>
+<h1 class="text-[18px] font-bold text-on-surface">Thêm mới hợp đồng</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full active:scale-95 duration-150">
+<span class="material-symbols-outlined text-on-surface">more_vert</span>
+</button>
+</header>
+<main class="p-4 space-y-4">
+<!-- Section 1: Liên kết & Phân loại -->
+<div class="bg-white border border-outline-variant rounded-lg overflow-hidden">
+<button class="w-full flex items-center justify-between p-4 bg-card-header text-on-surface expanded-btn" onclick="toggleCard(this)">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">link</span>
+<span class="text-[14px] uppercase tracking-wide">LIÊN KẾT &amp; PHÂN LOẠI</span>
+</div>
+<span class="material-symbols-outlined rotate-icon">expand_more</span>
+</button>
+<div class="card-content expanded p-4 space-y-4">
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Đơn vị chủ trì <span class="text-error">*</span></label>
+<select class="w-full border border-outline-variant rounded-lg p-3 text-[14px] bg-white">
+<option>-- Chọn đơn vị --</option>
+</select>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Gắn Cơ hội (CHKD)</label>
+<select class="w-full border border-outline-variant rounded-lg p-3 text-[14px] bg-white">
+<option>-- Không --</option>
+</select>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Gắn Dự án</label>
+<select class="w-full border border-outline-variant rounded-lg p-3 text-[14px] bg-white">
+<option>-- Không --</option>
+</select>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Khách hàng</label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" placeholder="Tìm khách hàng theo tên hoặc mã..." type="text"/>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">SP/DV cung cấp</label>
+<select class="w-full border border-outline-variant rounded-lg p-3 text-[14px] bg-white">
+<option>-- Chọn SP/DV --</option>
+</select>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Địa bàn</label>
+<select class="w-full border border-outline-variant rounded-lg p-3 text-[14px] bg-white">
+<option>--</option>
+</select>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Lĩnh vực</label>
+<select class="w-full border border-outline-variant rounded-lg p-3 text-[14px] bg-white">
+<option>--</option>
+</select>
+</div>
+</div>
+</div>
+</div>
+<!-- Section 2: Thông tin hợp đồng -->
+<div class="bg-white border border-outline-variant rounded-lg overflow-hidden">
+<button class="w-full flex items-center justify-between p-4 bg-card-header text-on-surface expanded-btn" onclick="toggleCard(this)">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">description</span>
+<span class="text-[14px] uppercase tracking-wide">THÔNG TIN HỢP ĐỒNG</span>
+</div>
+<span class="material-symbols-outlined rotate-icon">expand_more</span>
+</button>
+<div class="card-content expanded p-4 space-y-4">
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Tên hợp đồng / Tên dự án <span class="text-error">*</span></label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" placeholder="Để trống sẽ lấy theo Cơ hội/Dự án đã gắn" type="text"/>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Số hợp đồng</label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" type="text"/>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Loại hợp đồng</label>
+<select class="w-full border border-outline-variant rounded-lg p-3 text-[14px] bg-white">
+<option>-- Chọn loại --</option>
+</select>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Trạng thái hợp đồng</label>
+<select class="w-full border border-outline-variant rounded-lg p-3 text-[14px] bg-white">
+<option>-- Chọn trạng thái --</option>
+</select>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Nhân sự chuyên quản</label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" type="text"/>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Link KMS file hợp đồng</label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" placeholder="https://kms..." type="url"/>
+</div>
+</div>
+</div>
+<!-- Section 3: Mốc thời gian -->
+<div class="bg-white border border-outline-variant rounded-lg overflow-hidden">
+<button class="w-full flex items-center justify-between p-4 bg-card-header text-on-surface expanded-btn" onclick="toggleCard(this)">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">calendar_month</span>
+<span class="text-[14px] uppercase tracking-wide">MỐC THỜI GIAN</span>
+</div>
+<span class="material-symbols-outlined rotate-icon">expand_more</span>
+</button>
+<div class="card-content expanded p-4 space-y-4">
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Ngày ký HĐ</label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" type="date"/>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Ngày nghiệm thu / đưa vào SD</label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" type="date"/>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Ngày hết hạn HĐ / BHBT</label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" type="date"/>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Thời gian thuê / bảo hành (tháng)</label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" type="number"/>
+</div>
+</div>
+</div>
+<!-- Section 4: Giá trị (đồng) -->
+<div class="bg-white border border-outline-variant rounded-lg overflow-hidden">
+<button class="w-full flex items-center justify-between p-4 bg-card-header text-on-surface expanded-btn" onclick="toggleCard(this)">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">payments</span>
+<span class="text-[14px] uppercase tracking-wide">GIÁ TRỊ (ĐỒNG)</span>
+</div>
+<span class="material-symbols-outlined rotate-icon">expand_more</span>
+</button>
+<div class="card-content expanded p-4 space-y-4">
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Giá trị HĐ (đ)</label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" type="number"/>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Giá trị về VNPT (đ)</label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" type="number"/>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Tỉ lệ % về IT</label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" type="number"/>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Giá trị về VNPT-IT (đ)</label>
+<input class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" placeholder="Để trống = VNPT × %IT" type="text"/>
+</div>
+</div>
+</div>
+</div>
+<!-- Section 5: Điều khoản & Ghi chú -->
+<div class="bg-white border border-outline-variant rounded-lg overflow-hidden">
+<button class="w-full flex items-center justify-between p-4 bg-card-header text-on-surface expanded-btn" onclick="toggleCard(this)">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">sticky_note_2</span>
+<span class="text-[14px] uppercase tracking-wide">ĐIỀU KHOẢN &amp; GHI CHÚ</span>
+</div>
+<span class="material-symbols-outlined rotate-icon">expand_more</span>
+</button>
+<div class="card-content expanded p-4 space-y-4">
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Các điều khoản ràng buộc (cam kết bảo hành/bảo trì/bàn giao...)</label>
+<textarea class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" rows="4"></textarea>
+</div>
+<div>
+<label class="block text-[14px] font-medium text-on-surface mb-1.5">Ghi chú</label>
+<textarea class="w-full border border-outline-variant rounded-lg p-3 text-[14px]" rows="3"></textarea>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Action Bar -->
+<div class="fixed bottom-0 left-0 w-full p-4 bg-white shadow-[0px_-4px_12px_rgba(0,0,0,0.05)] z-50">
+<button class="w-full bg-primary text-white py-4 rounded-lg text-[14px] font-normal active:scale-[0.98] transition-transform duration-200">
+        Lưu hợp đồng
+    </button>
+</div>
+<script>
+    function toggleCard(button) {
+        const content = button.nextElementSibling;
+        button.classList.toggle('expanded-btn');
+        if (content.classList.contains('expanded')) {
+            content.classList.remove('expanded');
+        } else {
+            content.classList.add('expanded');
+        }
+    }
+</script>
+</body></html>

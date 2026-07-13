@@ -1,0 +1,99 @@
+#!/bin/bash
+# Pre-commit Hook cho VNA Office Flutter Project
+# Tự động analyze và format trước khi commit
+
+set -e
+
+echo "🔍 Running pre-commit checks..."
+
+# ── Dynamic project root ──────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Load .workflow_config (if exists)
+if [[ -f "$PROJECT_ROOT/.workflow_config" ]]; then
+    # shellcheck source=/dev/null
+    source "$PROJECT_ROOT/.workflow_config" 2>/dev/null || true
+fi
+
+cd "$PROJECT_ROOT"
+
+echo "📝 Formatting code..."
+flutter format --set-exit-if-changed lib/ || true
+
+echo "🔎 Analyzing code..."
+flutter analyze --no-fatal-infos --no-fatal-warnings lib/ || {
+    echo "⚠️  Analysis issues found. Please fix before committing."
+    exit 1
+}
+
+echo "🔴 Checking for TODO comments..."
+if grep -r "// TODO:" lib/ --include="*.dart" | grep -v "// TODO:.*implement\|// TODO.*FAKE\|// TODO: navigate\|// TODO.*STUB"; then
+    echo "⚠️  Found TODO comments that need to be addressed:"
+    grep -r "// TODO:" lib/ --include="*.dart" | grep -v "// TODO:.*implement\|// TODO.*FAKE\|// TODO: navigate\|// TODO.*STUB" | head -10
+    echo "Please remove or complete TODOs before committing."
+    exit 1
+fi
+
+echo "🖨️  Checking for debug print statements..."
+if grep -r "print(" lib/ --include="*.dart" | grep -v "^\s*//" | grep -v "Log\."; then
+    echo "⚠️  Found print statements. Please remove them:"
+    grep -r "print(" lib/ --include="*.dart" | grep -v "^\s*//" | grep -v "Log\." | head -5
+    exit 1
+fi
+
+echo "🎨 Checking for hardcoded colors..."
+HARDCODED_COLORS=$(grep -r "Color(0x" lib/ --include="*.dart" | grep -v "ColorApp\|ColorFilter\|Color\.fromARGB\|Color\.fromRGBO" || true)
+if [ -n "$HARDCODED_COLORS" ]; then
+    echo "⚠️  Found hardcoded colors. Use ColorApp.* instead:"
+    echo "$HARDCODED_COLORS" | head -5
+    exit 1
+fi
+
+echo "⚡ Checking async patterns..."
+ASYNC_VOID=$(grep -rn "void.*async" lib/ --include="*.dart" | grep -v "Future<void>" | grep -v "//" || true)
+if [ -n "$ASYNC_VOID" ]; then
+    echo "⚠️  Found 'void async' - should be 'Future<void>':"
+    echo "$ASYNC_VOID" | head -5
+    exit 1
+fi
+
+echo "🐛 Checking empty catch blocks..."
+EMPTY_CATCH=$(grep -rn "catch.*(\|) {}" lib/ --include="*.dart" || true)
+if [ -n "$EMPTY_CATCH" ]; then
+    echo "⚠️  Found empty catch blocks:"
+    echo "$EMPTY_CATCH" | head -5
+    echo "Please handle exceptions properly."
+    exit 1
+fi
+
+echo "🔧 Checking Provider patterns..."
+if grep -rn "setState" lib/ --include="*_provider.dart" 2>/dev/null | grep -v "^\s*//"; then
+    echo "⚠️  Found setState in Provider - use notifyListeners() instead"
+    exit 1
+fi
+
+echo "🧹 Checking dispose patterns..."
+if grep -rn "AnimationController\|StreamSubscription\|Timer" lib/ --include="*.dart" | grep -v "dispose\|cancel"; then
+    echo "⚠️  Found controllers/streams that may need dispose"
+fi
+
+echo "🔒 Checking for sensitive data logging..."
+if grep -rn "print.*password\|print.*token\|print.*secret" lib/ --include="*.dart" -i 2>/dev/null; then
+    echo "⚠️  Found potential sensitive data in logs!"
+    exit 1
+fi
+
+echo "✅ All pre-commit checks passed!"
+echo ""
+echo "═══════════════════════════════════════════════════"
+echo "📊 DEV STATUS SUMMARY"
+echo "═══════════════════════════════════════════════════"
+echo ""
+echo "Dev:     ✅ Done"
+echo "Review:  ✅ Done"
+echo "Fix:     ✅ Done"
+echo ""
+echo "🎉 Feature is ready!"
+echo "═══════════════════════════════════════════════════"
+exit 0

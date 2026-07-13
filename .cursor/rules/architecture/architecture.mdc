@@ -1,0 +1,174 @@
+---
+description: Repository + Service + Provider pattern. Apply when creating or modifying any feature screen or data layer.
+globs: **/*.dart
+alwaysApply: true
+---
+
+# Architecture — obm_gen_with_ai
+
+> Variables: See `_project_config.mdc` for this project's base class names, import paths, and UI tokens.
+> When copying to a new project: update `_project_config.mdc` only. All rules reference variables from that file.
+
+## Pattern
+
+UI and data flow in one direction:
+
+```
+Widget (extends {{SCREEN_BASE_CLASS}})
+   │   initState() → {{INIT_EVENT_LISTENER}}  ← wires eventStream
+   │   build()    → buildRoot() → {{CONSUMER_BASE}}<S,P>
+   │
+   ├── {{CONSUMER_BASE}}<S extends {{SERVICE_BASE}}, P extends {{PROVIDER_BASE}}<S>>
+   │       switches on p.currentState
+   │
+   └── P extends {{PROVIDER_BASE}}<S>  (ChangeNotifier)
+         │   - state machine driven by {{STATE_TYPE}}
+         │   - dialog/toast/progress sent via eventStream
+         │   - KHÔNG call Dio directly
+         │
+         └── S extends {{SERVICE_BASE}}
+                │   - holds Dio client reference
+                │   - calls Dio → returns parsed model
+                │
+                └── Dio  ← {{DIO_CREATE}} (interceptors already wired)
+```
+
+## Folder Structure
+
+```
+lib/
+├── core/
+│   ├── base/
+│   │   ├── base_page.dart              # {{SCREEN_STATE_BASE}}, {{SCREEN_BASE_CLASS}}, BasePageMixin, BaseLoadMorePage
+│   │   ├── base_provider.dart          # {{PROVIDER_BASE}} + ControllerLoadMoreMixin
+│   │   ├── selector_base.dart          # {{CONSUMER_BASE}}, {{SELECTOR_BASE}}, ProgressLoad
+│   │   ├── dialog/                     # DialogType, DialogEvent, DialogHelper
+│   │   ├── progress/                   # ProgressEvent, ProgressHelper
+│   │   └── toast/                      # ToastEvent, ToastHelper
+│   ├── components/
+│   │   ├── core_button.dart            # {{BTN_CLASS}}
+│   │   ├── core_text.dart              # {{TEXT_STYLE_CLASS}}
+│   │   └── image.dart                 # {{SVG_HELPER}}()
+│   ├── constants/
+│   │   ├── color_app.dart              # ColorApp
+│   │   ├── app_strings.dart            # {{I18N_CLASS}}
+│   │   └── constants.dart              # Constants (empty, zero)
+│   ├── utils/util.dart                  # Util.orEmpty()
+│   └── base/services/
+│       ├── base_service.dart            # {{SERVICE_BASE}}(Dio)
+│       ├── dio_option.dart              # {{DIO_CREATE}}
+│       ├── dio_form.dart               # {{DIO_FORM_INSTANCE}}
+│       ├── loading_interceptor.dart     # {{LOADING_INTERCEPTOR}} + {{LOADING_HUB}}
+│       └── index.dart
+├── features/
+│   └── <feature_name>/
+│       ├── <feature_name>_screen.dart
+│       ├── component/
+│       │   ├── <feature_name>_provider.dart
+│       │   └── <feature_name>_service.dart
+│       ├── model/
+│       │   └── <feature_name>_model.dart
+│       └── widget/
+│           ├── body_<feature_name>_widget.dart
+│           └── item_<entity>.dart
+├── assets/
+│   ├── images/
+│   └── translations/{vi,en,vi-VN,en-US}.json
+├── main.dart
+└── pubspec.yaml
+```
+
+## Base Classes (lib/core/base/)
+
+```dart
+// {{SERVICE_BASE}} — thin Dio wrapper
+abstract class XxxService extends {{SERVICE_BASE}} {
+  XxxService(Dio client) : super(client);
+}
+
+// {{PROVIDER_BASE}}<S> extends ChangeNotifier
+//   {{STATE_TYPE}} { {{STATE_VALUES}} }
+//   Getters: isLoading, isLoaded, loadingFailed, noData, errorMessage
+//   Methods: {{M_SHOW_LOADING}}, {{M_SHOW_LOADED}}, {{M_SHOW_ERROR}}, {{M_SHOW_NO_DATA}},
+//            {{M_SET_STATE_NONE}}, {{M_SHOW_TOAST}}, {{M_SHOW_DIALOG}}, {{M_SHOW_PROGRESS}}, {{M_HIDE_PROGRESS}}
+//   Mixin:   ControllerLoadMoreMixin (page=1, limit=20, RefreshController)
+```
+
+## Screen Entry Pattern (REQUIRED)
+
+```dart
+class HomeScreen extends {{SCREEN_BASE_CLASS}} {
+  const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState
+    extends {{SCREEN_STATE_BASE}}<HomeScreen, HomeService, HomeProvider> {
+  @override
+  Widget buildBody(BuildContext context) {
+    return const BodyHomeWidget();
+  }
+}
+```
+
+`{{SCREEN_STATE_BASE}}<T, S, P>` handles:
+- `initState()` → `{{INIT_EVENT_LISTENER}}` (wires eventStream) + `Connectivity` listener.
+- `dispose()` → cancels subscription.
+- `build()` → `buildRoot(context)` → `{{CONSUMER_BASE}}<S,P>` (loading, body, error/noData fallback).
+
+## Provider Placement — Widget Tree
+
+Provider được đặt ở **widget cha phía trên screen** (route wrapper), KHÔNG trong `buildBody()` hay body widget.
+
+```
+MultiProvider (route / wrapper)
+├── ChangeNotifierProvider<<Tên>Provider>  ← ĐĂNG KÝ Ở ĐÂY
+└── <Tên>Screen (extends {{SCREEN_BASE_CLASS}})
+    └── buildRoot() → {{CONSUMER_BASE}}<S,P>
+                      Consumer<P> ← loading/error/noData cả page
+        └── buildBody() → Body<Tên>Widget (StatelessWidget)
+            ├── context.watch<<Tên>Provider>>()      ← watch state
+            ├── context.read<<Tên>Provider>>()        ← trigger action
+            └── context.select<<Tên>Provider, R>()  ← watch 1 field
+```
+
+**Quy tắc:**
+- **Loading cả page** → `{{CONSUMER_BASE}}` trong `buildRoot()` xử lý sẵn → body widget không cần wrapper gì.
+- **Loading từng thành phần** → dùng `SelectorBase`/`ConsumerBase` chỉ cho phần đó (ví dụ: nút Submit có loading riêng).
+- **Đọc provider** → `context.read<>()` hoặc `context.watch<>()` / `context.select<>()` trực tiếp trong body.
+
+## HTTP
+
+| Helper                      | Use                          |
+|-----------------------------|------------------------------|
+| `{{DIO_CREATE}}`            | JSON (default)               |
+| `{{DIO_CREATE_FORM}}`       | Form-urlencoded              |
+| `{{DIO_FORM_INSTANCE}}`    | Singleton with interceptors   |
+| `{{LOADING_INTERCEPTOR}}` + `{{LOADING_HUB}}` | Global request counter |
+
+`{{DIO_CREATE}}` ships with: `LogInterceptor`, `QueuedInterceptorsWrapper` (auth header, response hook, 401 retry, error message parsing). Do NOT add duplicate interceptors.
+
+## Hard Rules
+
+| # | Rule                                  | Reason                                          |
+|---|---------------------------------------|------------------------------------------------|
+| 1 | KHÔNG use BLoC, Riverpod, GetX       | Project uses {{PROVIDER_BASE}} only            |
+| 2 | KHÔNG call Dio directly from Widget    | Service is the only layer that touches Dio       |
+| 3 | KHÔNG parse JSON in Widget or Provider | Service returns typed models                    |
+| 4 | KHÔNG `setState` for data owned by provider | Use `notifyListeners()` via base class    |
+| 5 | KHÔNG store `BuildContext` in provider | Provider must be context-independent            |
+| 6 | KHÔNG call `showDialog`/`showToast` directly from widget | Must go through `provider.{{M_SHOW_DIALOG}}/{{M_SHOW_TOAST}}` (eventStream) |
+| 7 | KHÔNG wrap body with extra loading indicator | `{{CONSUMER_BASE}}` already shows/dismisses it |
+| 8 | KHÔNG instantiate `Dio()` directly | Always go through `{{DIO_CREATE}}` |
+
+## Review Checklist
+
+- [ ] Screen `extends {{SCREEN_BASE_CLASS}}`, State `extends {{SCREEN_STATE_BASE}}<T,S,P>`.
+- [ ] `buildBody(BuildContext)` is overridden.
+- [ ] Provider `extends {{PROVIDER_BASE}}`.
+- [ ] Service `extends {{SERVICE_BASE}}` and only uses injected `client`.
+- [ ] Folder structure follows: `features/<feature>/{component,model,widget}/`.
+- [ ] Dialog/toast/progress are sent from Provider via `{{M_SHOW_DIALOG}}` / `{{M_SHOW_TOAST}}` / `{{M_SHOW_PROGRESS}}`.
+- [ ] `ChangeNotifierProvider` được đặt ở route/wrapper (không trong `buildBody()`).
+- [ ] Body widget là StatelessWidget thuần, không bọc `SelectorBase`/`ConsumerBase`/`ChangeNotifierProvider` trừ khi cần loading/error riêng.

@@ -1,0 +1,133 @@
+---
+description: Naming conventions for files, classes, variables, routes, localization keys. Apply when creating any new file or class.
+globs: **/*.dart
+alwaysApply: true
+---
+
+# Naming Conventions — obm_gen_with_ai
+
+> Variables: See `_project_config.mdc`. Key values: `{{FILE_CASE}}`, `{{CLASS_CASE}}`, `{{BOOL_PREFIX}}`, `{{CALLBACK_PREFIX}}`, `{{ASYNC_METHOD}}`, `{{I18N_CLASS}}`, `{{I18N_GETTER}}`, `{{I18N_FILE_PATTERN}}`, `{{I18N_KEY_STYLE}}`.
+
+## General Principles
+
+- **`{{FILE_CASE}}`** for file and folder names.
+- **`{{CLASS_CASE}}`** for class, enum, typedef names.
+- **`camelCase`** for variables, methods, parameters.
+- Names must be **meaningful** — no vague abbreviations (`btn1`, `data2`).
+- English in code; Vietnamese only for user-facing strings via `{{I18N_CLASS}}`.
+
+## File Names (`{{FILE_CASE}}`)
+
+| Type           | Pattern                          | Example                          |
+|----------------|----------------------------------|----------------------------------|
+| Screen         | `*_screen.dart`                 | `home_screen.dart`               |
+| Provider       | `*_provider.dart`               | `home_provider.dart`             |
+| Service        | `*_service.dart`                | `home_service.dart`              |
+| Model          | `*_model.dart`                  | `home_model.dart`                |
+| Body widget    | `body_*_widget.dart`             | `body_home_widget.dart`          |
+| Item widget    | `item_*.dart`                   | `item_user.dart`                 |
+| Component dir  | `component/`                     | `component/`                     |
+| Feature dir    | `features/<feature_name>/`       | `features/home/`                  |
+| Sub-dir        | `{component,model,widget}/`    | `features/home/{component,model,widget}/` |
+
+## Class Names (`{{CLASS_CASE}}`)
+
+| Type           | Pattern                          | Example                          |
+|----------------|----------------------------------|----------------------------------|
+| Screen         | `XxxScreen`                     | `HomeScreen`                    |
+| Body widget    | `BodyXxxWidget`                 | `BodyHomeWidget`                |
+| Item widget    | `ItemXxx`                       | `ItemUser`                      |
+| Provider       | `XxxProvider`                   | `HomeProvider`                  |
+| Service        | `XxxService`                    | `HomeService`                    |
+| Model          | `XxxModel`                      | `UserModel`                      |
+| Request/Resp   | `XxxRequest` / `XxxResponse`   | `LoginRequest` / `LoginResponse` |
+| Dialog widget  | `XxxForm` (extends `DialogForm`) | `LoginForm`                    |
+| Enum           | `XxxType`                       | `DocumentType`                   |
+
+## Variables & Methods
+
+```dart
+// camelCase
+String userName = 'An';
+bool isLoading = false;
+bool showHeader = true;
+bool hasPermission = false;
+bool enableSubmit = true;
+
+// Provider state fields ({{PROVIDER_BASE}} already provides currentState)
+// Multi-operation → separate field
+StateType detailState = StateType.none;
+
+// Async
+{{ASYNC_METHOD}} fetchItems() async { ... }
+```
+
+| Kind                    | Convention                                       |
+|-------------------------|--------------------------------------------------|
+| Boolean                 | `{{BOOL_PREFIX}}` (`isXxx`, `showXxx`, `hasXxx`, `canXxx`, `enableXxx`) |
+| Async method            | `{{ASYNC_METHOD}}` + `async/await`              |
+| Callback                | `{{CALLBACK_PREFIX}}` (`onTap`, `onSubmit`, `onRefresh`) |
+| Stream subscription     | `_xxxSubscription`                              |
+| Controller              | `_xxxController` / `xxxController` (public if needed) |
+| Refresh controller      | `refreshController` / `refreshControllerDefault` |
+
+## Routes
+
+```dart
+// lib/core/constants/routes.dart  (TODO: create when pushNamed is needed)
+class Routes {
+  static const String featureName = '/featureName';
+}
+
+// Usage
+Navigator.pushNamed(context, Routes.featureName, arguments: {...});
+```
+
+Route key name: camelCase. Route value: `/camelCase`.
+
+## Localization Keys (`{{I18N_KEY_STYLE}}`)
+
+- Files: `{{I18N_FILE_PATTERN}}`.
+- Key format: **`{{I18N_KEY_STYLE}}`** — NO `{{NO_LOCALE_KEYS}}` / `{{NO_PREFIX}}` convention.
+- Add a getter to `lib/core/constants/app_strings.dart`:
+
+```dart
+class {{I18N_CLASS}} {
+  static String get xxxLabel      => 'xxxLabel'.tr();
+  static String xxxWithArg(int n) => 'xxxWithArg'.tr(namedArgs: {'n': n.toString()});
+}
+```
+
+When adding a new string:
+1. Add key to all 4 JSON files.
+2. Add getter to `{{I18N_CLASS}}`.
+
+## Imports
+
+| Layer               | Path                                                  |
+|---------------------|-------------------------------------------------------|
+| Base / core         | `{{IMPORT_CORE}}`                                      |
+| Components          | `{{IMPORT_COMPONENTS}}`                                |
+| Constants           | `{{IMPORT_CONSTANTS}}`                                 |
+| Utils               | `{{IMPORT_UTIL}}`                                      |
+| Feature in same pkg | `{{PACKAGE_IMPORT}}features/<feature>/...`             |
+
+## DO / DON'T
+
+| DO                              | DON'T                                            |
+|---------------------------------|--------------------------------------------------|
+| `home_screen.dart`               | `HomeScreen.dart`, `homeScreenScreen.dart`       |
+| `class HomeScreen`              | `class home_screen`                              |
+| `bool isLoading`                | `bool loading`, `bool Loading`                   |
+| `bool showXxx`                  | `bool displayXxx`                               |
+| `{{ASYNC_METHOD}} fetchItems()` | `Future<void> getItems()` (name clashes with getter) |
+| `contextParent: context`         | `contextParrent` (check correct spelling) |
+
+## Review Checklist
+
+- [ ] New file follows `*_screen.dart` / `*_provider.dart` / etc. pattern.
+- [ ] Class name is PascalCase.
+- [ ] Booleans start with `{{BOOL_PREFIX}}`.
+- [ ] Every user-facing string has a key in all 4 JSON files and a getter in `{{I18N_CLASS}}`.
+- [ ] Imports follow the layer map above.
+- [ ] Callbacks named `{{CALLBACK_PREFIX}}`; subscriptions named `_xxxSubscription`.

@@ -1,0 +1,142 @@
+---
+description: Performance, rebuild optimization, widget structure. Apply when building or reviewing any widget.
+globs: **/*.dart
+alwaysApply: true
+---
+
+# Performance Rules — obm_gen_with_ai
+
+> Variables: See `_project_config.mdc`. Key values: `{{CONSUMER_BASE}}`, `{{SELECTOR_BASE}}`, `{{PROGRESS_LOAD}}`, `{{ON_START_HOOK}}`, `{{INIT_EVENT_LISTENER}}`, `{{PROVIDER_BASE}}`.
+
+## Goals
+
+- **Rebuild as little as possible** — only widgets that need the data rebuild.
+- **No heavy work in `build()`** — no JSON parsing, no Dio calls.
+- **Use `const` wherever possible** — compiler skips unchanged subtrees.
+
+## Rebuild Optimization
+
+| Scenario                             | Approach                                         |
+|-------------------------------------|--------------------------------------------------|
+| Watch provider state                 | `{{CONSUMER_BASE}}<S,P>` (auto-switches on `currentState`) |
+| Watch a specific field              | `context.select<T, R>((p) => p.field)`          |
+| Inside callback / event handler     | `context.read<T>()` — NEVER `.watch()`           |
+| Stateless widget with no state      | Use `const` constructor                          |
+
+```dart
+// BAD — watches entire provider → rebuilds on every notify
+final p = context.watch<XxxProvider>();
+return Text(p.items.length.toString());
+
+// GOOD — watches only length field → rebuilds only when length changes
+final count = context.select<XxxProvider, int>((p) => p.items.length);
+return Text(count.toString());
+```
+
+## Widget Structure
+
+1. **`build()` must be clean** — only `return Widget(...)`. Extract logic to `_buildXxx()` methods or separate widget classes.
+2. **Separate Screen entry from Body widget:**
+   - `XxxScreen extends {{SCREEN_BASE_CLASS}}` — declares generic types only.
+   - `_XxxScreenState extends {{SCREEN_STATE_BASE}}<T,S,P>` — overrides `buildBody()`.
+   - `BodyXxxWidget` (StatelessWidget) — real UI, watches state via `{{CONSUMER_BASE}}` / `context.select`.
+3. **Max ~4 nesting levels** before extracting a widget.
+4. **Initial data fetch** — put in `{{ON_START_HOOK}}` override so it runs from the provider constructor:
+
+```dart
+class XxxProvider extends {{PROVIDER_BASE}}<XxxService> {
+  @override
+  void {{ON_START_HOOK}}() {
+    super.onStart();
+    fetchItems();
+  }
+}
+```
+
+## Dispose
+
+```dart
+@override
+void dispose() {
+  _controller.dispose();
+  _focusNode.dispose();
+  _scrollController.dispose();
+  // refreshController.dispose();  ← if using pull-to-refresh
+  super.dispose();
+}
+```
+
+`{{SCREEN_STATE_BASE}}.dispose()` already cancels the `Connectivity` subscription — only dispose controllers/streams you created.
+
+## Async Safety
+
+```dart
+Future<void> _onSubmit() async {
+  await context.read<XxxProvider>().submit();
+  if (!mounted) return;
+  context.read<XxxProvider>().showToast(
+    {{I18N_CLASS}}.done,
+    type: {{TOAST_TYPE_ENUM}}.success,
+  );
+}
+```
+
+## Image & List
+
+| Rule                                                       | Reason                                    |
+|------------------------------------------------------------|-------------------------------------------|
+| Local SVG → `{{SVG_HELPER}}(name, width:, height:)`       | Centralized SvgPicture wrapper            |
+| Long list → `ListView.builder` / `.separated`             | Lazy item construction                    |
+| Pull-to-refresh + load-more → `BaseLoadMorePage.generateList()` | `SmartRefresher` + `RefreshController` |
+| Avoid `setState` inside `build`                            | Triggers infinite rebuild                 |
+| `ListView` with `itemExtent` when items share the same height | Skips measure pass → smoother scroll  |
+
+## Rebuild Boundaries
+
+```dart
+// GOOD — narrow rebuild scope per widget
+class HeaderWidget extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return {{SELECTOR_BASE}}<XxxProvider>(
+      selector: (_, p) => p.title,
+      contextParrent: context,
+      onRepository: (ctx, repo) =>
+          Text((repo as XxxProvider).title),
+    );
+  }
+}
+
+class ListWidget extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return {{CONSUMER_BASE}}<XxxService, XxxProvider>(
+      onRepositorySuccess: (repo) =>
+          _ListContent(items: (repo as XxxProvider).items),
+    );
+  }
+}
+```
+
+## DO / DON'T
+
+| DO                                                    | DON'T                                               |
+|-------------------------------------------------------|-----------------------------------------------------|
+| `{{CONSUMER_BASE}}` auto-switches on `currentState`    | Plain `Consumer<P>` — requires manual state checks   |
+| `context.read` in callbacks                            | `context.watch` in callbacks                       |
+| `const` on stateless widget constructors              | Calling `X()` without `const`                     |
+| `provider.{{ON_START_HOOK}}()` for initial data fetch  | Calling API inside `initState` directly             |
+| Check `mounted` after `await`                          | `setState` / `Navigator.pop` after `await`          |
+| `ListView.builder` for long lists                      | Unbounded `ListView` with thousands of items        |
+| `{{SVG_HELPER}}()` for local SVG                      | `SvgPicture.asset(...)` called directly            |
+| `provider.{{M_SHOW_PROGRESS}}()` for blocking operations | `{{PROGRESS_LOAD}}.showProgress(context)` from widget |
+
+## Review Checklist
+
+- [ ] Uses `{{CONSUMER_BASE}}` or `context.select` (not plain `Consumer`).
+- [ ] Callbacks use `context.read`.
+- [ ] `buildBody()` is under ~80 lines with no heavy logic.
+- [ ] All Controller/FocusNode/Stream subscriptions are disposed.
+- [ ] `mounted` checked after every `await` in StatefulWidget.
+- [ ] Long lists use `.builder` / `.separated`.
+- [ ] SVG assets loaded via `{{SVG_HELPER}}()`.

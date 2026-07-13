@@ -1,0 +1,242 @@
+---
+description: Feature mapping generation workflow using 3 sources: SRS markdown + Figma MCP + Postman MCP. Auto-triggered when user provides --srs, --figma, --postman flags with /vnpt_workflow_create.
+globs:
+alwaysApply: false
+---
+
+# 📐 Feature Mapping Workflow — 3-Source Generator
+
+> **Variables:** This file uses `{{VARIABLE}}` tokens resolved from `_project_config.mdc`.
+> When copying to a new project: update `_project_config.mdc` only.
+
+> **TRIGGER:** Khi user dùng `/vnpt_workflow_create` với 3 nguồn:
+> - `--srs <file>` — SRS markdown file
+> - `--figma <url>` — Figma URL với node-id
+> - `--postman <collection>` — Postman collection name
+
+---
+
+## 🔄 Flow Tổng Quan
+
+```
+User Prompt:
+  /vnpt_workflow_create list_event
+    --srs SRS_Event.md
+    --figma "https://figma.com/design/...?node-id=74-7479"
+    --postman MobileEventAiGen
+
+        ↓
+[1] CLI create scaffold + .vnpt_cache/sources.json
+        ↓
+[2] Agent đọc _project_config.mdc → resolve {{VARIABLE}}
+        ↓
+[3] Agent đọc .vnpt_cache/sources.json → biết nguồn nào có
+        ↓
+[4] Gọi MCP song song:
+    ┌─ Figma MCP: get_design_context (node-id)
+    ├─ Postman MCP: searchPostmanElements → getCollection
+    └─ SRS: Read(file)
+        ↓
+[5] Tổng hợp → mapping doc + code với biến đã resolve
+```
+
+---
+
+## 📥 INPUT: Nguồn Nào User Cung Cấp?
+
+Đọc `.vnpt_cache/sources.json` để biết:
+
+```json
+{
+  "srs": { "file": "SRS_Event.md", "provided": true },
+  "figma": { "url": "https://...", "provided": true },
+  "postman": { "collection": "MobileEventAiGen", "provided": true }
+}
+```
+
+**Rules:**
+- Có đủ 3 → dùng cả 3
+- Có 2 → dùng 2 (nguồn còn lại = placeholder)
+- Có 1 → dùng 1 (2 nguồn còn lại = placeholder)
+- Không có nào → fallback về template (như cũ)
+
+---
+
+## 🔧 MCP CALLS — Chi Tiết
+
+### 1. Figma MCP — `get_design_context`
+
+**Khi nào:** `--figma` được cung cấp
+
+**Parse URL:**
+```
+URL: https://figma.com/design/0KNyBeLOsfZehfUViooSsO/VNA_Discovery?node-id=74-7479
+fileKey = 0KNyBeLOsfZehfUViooSsO
+nodeId  = 74-7479 → chuyển thành 74:7479
+```
+
+**Tool call:**
+```python
+CallMcpTool(
+  server="plugin-figma-figma",
+  toolName="get_design_context",
+  arguments={
+    "fileKey": "0KNyBeLOsfZehfUViooSsO",
+    "nodeId": "74:7479"
+  }
+)
+```
+
+**Output → dùng cho:**
+|| Mapping Section | Figma Data |
+|---|---|
+| 2.1 Screen Mapping | Screens list |
+| 2.2 Component Mapping | Widget/component names |
+| 2.3 Style Mapping | Colors, spacing, fonts |
+| File structure | Layout hints |
+
+---
+
+### 2. Postman MCP — `searchPostmanElements` + `getCollection`
+
+**Khi nào:** `--postman` được cung cấp
+
+**Step 1: Tìm collection**
+```python
+CallMcpTool(
+  server="user-postman",
+  toolName="searchPostmanElements",
+  arguments={
+    "entityType": "collections",
+    "q": "<collection_name>",
+    "ownership": "organization"
+  }
+)
+```
+
+**Step 2: Lấy collection details**
+```python
+CallMcpTool(
+  server="user-postman",
+  toolName="getCollection",
+  arguments={
+    "collectionId": "<id_từ_step_1>"
+  }
+)
+```
+
+**Output → dùng cho:**
+|| Mapping Section | Postman Data |
+|---|---|
+| 4.1 Endpoint Mapping | method, URL, endpoint |
+| 3.1 Entity Mapping | request/response schema fields |
+| Model fields | JSON field names + types |
+
+---
+
+### 3. SRS File — `Read`
+
+**Khi nào:** `--srs` được cung cấp
+
+**Trích xuất:**
+|| Nội dung | Dùng cho |
+|---|---|
+| "Mô tả chức năng" paragraphs | 1.3 User Stories |
+| Table: Tên trường, Kiểu điều khiển, Bắt buộc | 3.1 Entity Mapping |
+| Validation rules | Model field validation |
+
+---
+
+## 📝 OUTPUT: Điền Mapping Doc
+
+### Section 1: INPUTS
+
+```markdown
+### 1.1 SRS Reference
+|| Field | Value |
+|-------|-------|
+|| SRS URL | `<srs_path>` |
+|| Version | 1.0.0 |
+|| Owner | PM |
+
+### 1.2 Figma Design
+|| Screen | Figma URL | Node ID |
+|--------|-----------|---------|
+|| List | `https://figma.com/design/...?node-id=74:7479` | `74:7479` |
+
+### 1.3 User Stories
+```markdown
+- US-01: As a user, I want to view list so that I can browse items
+```
+```
+
+---
+
+### Section 2: DESIGN → CODE MAPPING (Từ Figma MCP)
+
+```markdown
+### 2.1 Screen Mapping
+|| Figma Screen | Code File | Route |
+|--------------|-----------|-------|
+|| List Screen | `list_event_screen.dart` | `/list_event` |
+
+### 2.2 Component Mapping
+|| Figma Component | Code Widget | Props |
+|-----------------|-------------|-------|
+|| EventCard | `EventCardWidget` | item, onTap |
+|| HeaderBar | AppBar (trong {{SCREEN_BASE_CLASS}}) | title |
+|| EmptyState | `EmptyListIndicator` | message |
+
+### 2.3 Style Mapping
+|| Figma Style | Code Token |
+|------------|------------|
+|| Primary | `{{BRAND}}` |
+|| Background | `{{BG_LIGHT}}` |
+|| Text/Body | `{{TEXT_COMMON}}` |
+```
+
+---
+
+### Section 3: DATA MODELS (Từ SRS + Postman)
+
+```markdown
+### 3.1 Entity Mapping
+|| SRS Field | Model Field | Type | Postman Schema |
+|-----------|-------------|------|----------------|
+|| ID sự kiện | id | int | $.data[*].id |
+|| Tên sự kiện | title | String | $.data[*].title |
+```
+
+---
+
+### Section 4: API MAPPING (Từ Postman MCP)
+
+```markdown
+### 4.1 Endpoint Mapping
+|| Action | Endpoint | Method | Postman Request | Service Method |
+|--------|----------|--------|-----------------|----------------|
+|| Load List | `/events` | GET | GetEvents | `getItems()` |
+```
+
+---
+
+## ⚠️ ERROR HANDLING
+
+|| Lỗi | Xử lý |
+|---|---|
+| Figma MCP timeout | Dùng placeholder, ghi `⚠️ Figma: timeout` |
+| Postman collection not found | Hỏi user xác nhận tên, hoặc dùng placeholder |
+| SRS file not found | Bỏ qua section đó, dùng placeholder |
+| Partial sources | Dùng nguồn nào có, placeholder nguồn còn lại |
+
+---
+
+## 📋 Checklist Sau Khi Gen
+
+- [ ] Mapping doc điền đủ 3 nguồn
+- [ ] User stories từ SRS
+- [ ] Screens/components từ Figma MCP
+- [ ] Endpoints từ Postman MCP
+- [ ] Models fields từ SRS + Postman schema
+- [ ] Code files dùng đúng tokens (`{{BRAND}}`, `{{TEXT_STYLE_CLASS}}.*`, `{{I18N_GETTER}}`)
+- [ ] KHÔNG hardcoded strings/colors

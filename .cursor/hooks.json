@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": ".cursor/hooks/vnpt-workflow-router.sh",
+        "timeout": 5
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": ".cursor/hooks/vnpt-session-injector.sh",
+        "timeout": 3
+      }
+    ]
+  }
+}

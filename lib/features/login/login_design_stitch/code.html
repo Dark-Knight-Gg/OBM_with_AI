@@ -1,0 +1,241 @@
+<!DOCTYPE html><html class="light" lang="vi"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>DAS - Đăng nhập Hệ thống</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&amp;family=JetBrains+Mono&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#93000a",
+                        "surface-tint": "#0061a2",
+                        "inverse-primary": "#9dcaff",
+                        "surface-container": "#eceef0",
+                        "on-secondary-container": "#00586d",
+                        "inverse-on-surface": "#eff1f3",
+                        "on-surface-variant": "#404751",
+                        "surface-container-highest": "#e0e3e5",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed": "#d8e2ff",
+                        "primary": "#005f9e",
+                        "on-tertiary-fixed": "#001a40",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed": "#001f28",
+                        "primary-fixed-dim": "#9dcaff",
+                        "surface-container-high": "#e6e8ea",
+                        "tertiary-fixed-dim": "#acc7ff",
+                        "secondary": "#00677f",
+                        "outline": "#707882",
+                        "on-surface": "#191c1e",
+                        "surface": "#f7f9fb",
+                        "on-secondary": "#ffffff",
+                        "surface-variant": "#e0e3e5",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#fefcff",
+                        "surface-dim": "#d8dadc",
+                        "surface-container-low": "#f2f4f6",
+                        "tertiary": "#2a5aa7",
+                        "secondary-fixed-dim": "#4ad6ff",
+                        "inverse-surface": "#2d3133",
+                        "primary-fixed": "#d1e4ff",
+                        "on-primary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-container": "#0078c7",
+                        "on-tertiary": "#ffffff",
+                        "background": "#f7f9fb",
+                        "tertiary-container": "#4773c2",
+                        "on-tertiary-fixed-variant": "#064490",
+                        "on-primary-container": "#fdfcff",
+                        "on-primary-fixed": "#001d36",
+                        "on-primary-fixed-variant": "#00497c",
+                        "secondary-fixed": "#b6eaff",
+                        "on-background": "#191c1e",
+                        "outline-variant": "#c0c7d3",
+                        "surface-bright": "#f7f9fb",
+                        "secondary-container": "#35d4ff",
+                        "on-secondary-fixed-variant": "#004e60"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "gutter-md": "16px",
+                        "container-padding": "40px",
+                        "stack-md": "24px",
+                        "stack-sm": "8px",
+                        "stack-lg": "48px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "mono-sm": ["JetBrains Mono"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-bold": ["Inter"],
+                        "headline-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "label-sm": ["12px", {"lineHeight": "1.2", "fontWeight": "500"}],
+                        "display-lg": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "mono-sm": ["12px", {"lineHeight": "1.2", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "1.3", "fontWeight": "700"}],
+                        "body-lg": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "700"}],
+                        "label-bold": ["14px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                        "headline-lg": ["30px", {"lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "700"}]
+                    }
+                }
+            }
+        };
+    </script>
+<style>
+        body {
+            background: #f7f9fb;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .bg-login-gradient {
+            background: linear-gradient(135deg, #005f9e 0%, #0078c7 50%, #35d4ff 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        .dot-pattern {
+            background-image: radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .card-shadow {
+            box-shadow: 0px 10px 40px rgba(0, 0, 0, 0.08), 0px 2px 10px rgba(0, 0, 0, 0.04);
+        }
+        .btn-gradient {
+            background: linear-gradient(90deg, #005f9e 0%, #35d4ff 100%);
+            transition: all 0.2s ease;
+        }
+        .btn-gradient:active {
+            transform: scale(0.98);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="font-body-md text-on-surface">
+<!-- Global Background Wrapper -->
+<main class="flex-grow flex flex-col items-center justify-center relative w-full px-gutter-md py-stack-lg bg-login-gradient">
+<!-- Background Dot Pattern Overlay -->
+<div class="absolute inset-0 dot-pattern opacity-40 pointer-events-none"></div>
+<!-- Animated atmospheric element -->
+<div class="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+<div class="absolute bottom-0 left-0 w-96 h-96 bg-primary-container/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+<!-- Login Container -->
+<div class="w-full max-w-[480px] z-10">
+<!-- Brand Logo (Contextual) -->
+<div class="flex flex-col items-center mb-stack-md text-center">
+<h1 class="text-on-primary font-headline-lg text-headline-lg font-black tracking-tight leading-none mb-2">DAS</h1>
+<p class="text-on-primary/80 font-label-sm text-label-sm tracking-wide uppercase">Đồng hành kiến tạo hành chính số</p>
+</div>
+<!-- Main Form Card -->
+<div class="bg-surface-container-lowest rounded-xl p-container-padding card-shadow w-full">
+<div class="text-center mb-stack-md">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-stack-sm">Đăng nhập</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Vui lòng đăng nhập để tiếp tục</p>
+</div>
+<!-- Alert Message -->
+<div class="flex items-center gap-2 bg-[#D1E7DD] text-[#0f5132] px-4 py-3 rounded-lg mb-stack-md">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<p class="font-label-sm text-label-sm">Bạn đã đăng xuất.</p>
+</div>
+<!-- Form -->
+<form class="flex flex-col gap-stack-md">
+<!-- Email Field -->
+<div class="flex flex-col gap-stack-sm">
+<label class="font-label-bold text-label-bold text-on-surface" for="email">Email</label>
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">mail</span>
+<input class="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant rounded-lg font-body-md text-body-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" id="email" placeholder="email@ttdas.vn" type="email" value="email@ttdas.vn">
+</div>
+</div>
+<!-- Password Field -->
+<div class="flex flex-col gap-stack-sm">
+<label class="font-label-bold text-label-bold text-on-surface" for="password">Mật khẩu</label>
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">lock</span>
+<input class="w-full pl-12 pr-4 py-3 bg-surface border border-outline-variant rounded-lg font-body-md text-body-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" id="password" placeholder="••••••••" type="password" value="********">
+<button class="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-primary transition-colors focus:outline-none" type="button">
+<span class="material-symbols-outlined">visibility</span>
+</button></div>
+</div><div class="flex items-center gap-2 mt-1">
+<input class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary/20" id="remember" type="checkbox">
+<label class="font-body-md text-body-md text-on-surface-variant cursor-pointer" for="remember">Ghi nhớ tài khoản</label>
+</div>
+<!-- Submit Button -->
+<button class="btn-gradient w-full py-4 text-on-primary rounded-lg font-headline-md text-headline-md flex items-center justify-center gap-3 mt-stack-sm shadow-md" type="submit">
+<span class="material-symbols-outlined">login</span>
+<span>Đăng nhập</span>
+</button>
+</form>
+<!-- Demo Credentials -->
+<div class="mt-stack-md pt-stack-md border-t border-surface-variant text-center">
+<p class="font-label-sm text-label-sm text-on-surface-variant mb-1">Tài khoản demo:</p>
+<code class="font-mono-sm text-mono-sm bg-surface-container px-3 py-1 rounded text-primary">admin@ttdas.vn / admin123</code>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer Area (Inherited from JSON/Context) -->
+<footer class="w-full py-stack-md bg-transparent z-10">
+<div class="flex flex-col items-center gap-stack-sm text-center px-gutter-md">
+<p class="font-body-md text-body-md text-on-primary/60">© 2024 DAS - Hệ thống Quản trị Cơ hội &amp; Điều hành Kinh doanh</p>
+<div class="flex gap-4">
+<a class="font-label-bold text-label-bold text-on-primary/80 hover:text-on-primary transition-colors" href="#">Hỗ trợ</a>
+<span class="text-on-primary/20">|</span>
+<a class="font-label-bold text-label-bold text-on-primary/80 hover:text-on-primary transition-colors" href="#">Chính sách bảo mật</a>
+</div>
+</div>
+</footer>
+<!-- Micro-interactions Script -->
+<script>
+        document.querySelector('form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button');
+            const originalText = btn.innerHTML;
+            
+            btn.disabled = true;
+            btn.innerHTML = `<span class="material-symbols-outlined animate-spin">progress_activity</span> <span>Đang xử lý...</span>`;
+            
+            setTimeout(() => {
+                btn.innerHTML = `<span class="material-symbols-outlined">check</span> <span>Thành công</span>`;
+                btn.classList.replace('btn-gradient', 'bg-green-600');
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.classList.replace('bg-green-600', 'btn-gradient');
+                    btn.disabled = false;
+                }, 2000);
+            }, 1500);
+        });
+
+        // Floating label/focus logic via CSS is used, but could add focus effects here
+    </script>
+</body></html>

@@ -1,0 +1,364 @@
+# Code Review Criteria — obm_gen_with_ai
+
+> **Variables:** This file uses `{{VARIABLE}}` tokens resolved from `_project_config.mdc`.
+> When copying to a new project: update `_project_config.mdc` only.
+
+> Auto-review và fix bugs sau khi code xong.
+
+---
+
+## Tự Động Review Checklist
+
+### ⛔ HARD RULES (FAIL nếu vi phạm)
+
+> Variables: `{{SCREEN_BASE_CLASS}}`, `{{SCREEN_STATE_BASE}}`, `{{CONSUMER_BASE}}`, `{{PROVIDER_BASE}}`, `{{BRAND}}`, `{{TEXT_DEFAULT}}`, `{{I18N_CLASS}}`, `{{STATE_TYPE}}`, `{{M_SHOW_DIALOG}}`, `{{M_SHOW_TOAST}}`, `{{SVG_HELPER}}`, `{{TEXT_STYLE_CLASS}}`, `{{BTN_CLASS}}`.
+
+- [ ] **Screen dùng `{{SCREEN_STATE_BASE}}`** — KHÔNG dùng `Scaffold` trực tiếp
+  ```dart
+  // ❌ FAIL
+  return Scaffold(
+    backgroundColor: ColorApp.backgroundDefault,
+    appBar: AppBar(title: Text({{I18N_CLASS}}.title)),
+    body: ProgressHUD(
+      child: {{CONSUMER_BASE}}<XxxService, XxxProvider>(...),
+    ),
+  );
+
+  // ✅ PASS
+  class XxxScreen extends {{SCREEN_BASE_CLASS}} { ... }
+  class _XxxScreenState extends {{SCREEN_STATE_BASE}}<XxxScreen, XxxService, XxxProvider> {
+    @override
+    Widget buildBody(BuildContext context) {
+      return {{CONSUMER_BASE}}<XxxService, XxxProvider>(...);
+    }
+  }
+  ```
+
+- [ ] **Body Widget KHÔNG chứa `Scaffold` / `AppBar` / `ProgressHUD`**
+  ```dart
+  // ❌ FAIL — Body bị bọc lại
+  class BodyXxxWidget extends StatefulWidget {
+    @override
+    Widget build(BuildContext context) {
+      return Scaffold(                        // ❌
+        appBar: AppBar(...),                // ❌
+        body: ProgressHUD(                  // ❌
+          child: {{CONSUMER_BASE}}<XxxService, XxxProvider>(...),
+        ),
+      );
+    }
+  }
+
+  // ✅ PASS — Body chỉ chứa content
+  class BodyXxxWidget extends StatelessWidget {
+    @override
+    Widget build(BuildContext context) {
+      return {{CONSUMER_BASE}}<XxxService, XxxProvider>(
+        onRepositorySuccess: (repo) => ...,
+      );
+    }
+  }
+  ```
+
+- [ ] **Auto-detect vi phạm bằng grep**
+  ```bash
+  if grep -q "return Scaffold(" *_screen.dart; then
+    echo "❌ FAIL: Screen dùng Scaffold trực tiếp"
+  fi
+
+  if grep -q "appBar: AppBar\|return ProgressHUD(" widget/body_*.dart; then
+    echo "❌ FAIL: Body widget có AppBar/ProgressHUD"
+  fi
+  ```
+
+---
+
+### ✅ Lỗi Cần Fix Ngay
+
+- [ ] **Hardcoded colors** → Thay bằng `{{BRAND}}`, `{{TEXT_DEFAULT}}`, etc.
+  ```dart
+  // ❌ Sai
+  color: Color(0xFF0057E5)
+
+  // ✅ Đúng
+  color: {{BRAND}}
+  ```
+
+- [ ] **Hardcoded strings** → Thay bằng `{{I18N_GETTER}}`
+  ```dart
+  // ❌ Sai
+  Text('Lưu thành công')
+
+  // ✅ Đúng
+  Text({{I18N_CLASS}}.saveSuccess)
+  ```
+
+- [ ] **Hardcoded TextStyle** → Thay bằng `{{TEXT_STYLE_CLASS}}.*`
+  ```dart
+  // ❌ Sai
+  Text('...', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600))
+
+  // ✅ Đúng
+  Text('...', style: {{TEXT_STYLE_CLASS}}.common)
+  ```
+
+- [ ] **Hardcoded URLs** → Endpoint string literal trong service (TODO: extract)
+  ```dart
+  // ❌ Sai
+  dio.get('https://api.example.com/document')
+
+  // ✅ Đúng
+  dio.get('/api/document')  // TODO: move to Routes constant
+  ```
+
+- [ ] **TODO comments còn lại** → Xóa hoặc implement
+- [ ] **print/debugPrint statements** → Xóa
+
+- [ ] **setState trong Provider** → Dùng `notifyListeners()`
+  ```dart
+  // ❌ Sai
+  class XxxProvider extends {{PROVIDER_BASE}} {
+    void update() {
+      setState(() { data = newData; }); // ❌
+    }
+  }
+
+  // ✅ Đúng
+  class XxxProvider extends {{PROVIDER_BASE}} {
+    void update() {
+      data = newData;
+      notifyListeners();
+    }
+  }
+  ```
+
+- [ ] **Lưu BuildContext** → Không lưu vào biến
+  ```dart
+  // ❌ Sai
+  class _WidgetState extends State {
+    BuildContext _ctx; // ❌
+  }
+
+  // ✅ Đúng - dùng trực tiếp hoặc check mounted
+  ```
+
+- [ ] **Không check mounted sau await**
+  ```dart
+  // ❌ Sai
+  {{ASYNC_METHOD}} load() async {
+    await fetchData();
+    setState(() {}); // Có thể crash nếu unmounted
+  }
+
+  // ✅ Đúng
+  {{ASYNC_METHOD}} load() async {
+    await fetchData();
+    if (!mounted) return;
+    setState(() {});
+  }
+  ```
+
+### ✅ Architecture Violations
+
+- [ ] **Widget gọi API trực tiếp** → Chuyển qua Provider
+  ```dart
+  // ❌ Sai - API trong Widget
+  Widget build(BuildContext context) {
+    final data = await ApiService().fetchData(); // ❌
+  }
+
+  // ✅ Đúng - Gọi Provider
+  Widget build(BuildContext context) {
+    return {{CONSUMER_BASE}}<XxxService, XxxProvider>(
+      onRepositorySuccess: (p) => Text('${p.data}'),
+    );
+  }
+  ```
+
+- [ ] **Dùng BLoC/Riverpod/GetX** → Phải dùng {{PROVIDER_BASE}} pattern
+  ```dart
+  // ❌ Sai
+  BlocProvider(create: (_) => MyBloc())
+
+  // ✅ Đúng
+  ChangeNotifierProvider(create: (_) => MyProvider())
+  ```
+
+### ✅ Performance Issues
+
+- [ ] **ConsumerBase khi chỉ cần status** → Dùng {{SELECTOR_BASE}}
+  ```dart
+  // ❌ Chậm - rebuild khi data thay đổi
+  {{CONSUMER_BASE}}<XxxService, XxxProvider>(
+    onRepositorySuccess: (p) => Text('${p.data}'),
+  )
+
+  // ✅ Nhanh - chỉ rebuild khi status thay đổi
+  {{SELECTOR_BASE}}<XxxProvider>(
+    selector: (ctx, p) => p.currentState,
+    onRepositorySuccess: (p) => _buildContent(p),
+  )
+  ```
+
+- [ ] **Widget không const** → Thêm const
+  ```dart
+  // ❌ Sai
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.all(16),
+      child: Text('...'),
+    );
+  }
+
+  // ✅ Đúng
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.all(16),
+      child: Text('...'),
+    );
+  }
+  ```
+
+- [ ] **ListView không có itemExtent** → Thêm itemExtent nếu cố định
+  ```dart
+  // ✅ Tối ưu cho list cố định chiều cao
+  ListView.builder(
+    itemCount: items.length,
+    itemExtent: 100,
+    itemBuilder: (ctx, i) => ItemWidget(item: items[i]),
+  )
+  ```
+
+- [ ] **Image không cache** → Dùng `AppNetworkImage`
+  ```dart
+  // ❌ Sai - load lại mỗi lần
+  Image.network(url)
+
+  // ✅ Đúng - cache ảnh
+  AppNetworkImage(imageUrl: url)
+  ```
+
+- [ ] **Gọi hàm nặng trong build()** → Cache kết quả
+  ```dart
+  // ❌ Sai
+  Widget build(BuildContext context) {
+    final data = heavyComputation(); // ❌
+    return Text('$data');
+  }
+
+  // ✅ Đúng
+  @override
+  void initState() {
+    super.initState();
+    _cachedData = heavyComputation();
+  }
+  ```
+
+### ✅ Logic Bugs Cần Fix
+
+- [ ] **Null safety không xử lý** → Check null trước khi dùng
+  ```dart
+  // ❌ Crash tiềm ẩn
+  final name = user.name!;
+
+  // ✅ Đúng
+  final name = user.name ?? 'Khách';
+  ```
+
+- [ ] **Async void không await**
+  ```dart
+  // ❌ Sai - fire and forget
+  void saveData() async {
+    await api.save(data);
+  }
+
+  // ✅ Đúng
+  {{ASYNC_METHOD}} saveData() async {
+    await api.save(data);
+  }
+  ```
+
+- [ ] **Không handle exception trong try-catch**
+  ```dart
+  // ❌ Sai - catch rỗng
+  try {
+    await api.call();
+  } catch (e) {}
+
+  // ✅ Đúng
+  try {
+    await api.call();
+  } on {{DIO_EXCEPTION}} catch (e) {
+    errorMessage = e.message;
+    {{M_SHOW_ERROR}};
+  } catch (e) {
+    errorMessage = e.toString();
+    {{M_SHOW_ERROR}};
+  }
+  ```
+
+### ✅ Memory Leaks Prevention
+
+- [ ] **Stream/Subscription không dispose**
+- [ ] **AnimationController không dispose**
+- [ ] **Timer không cancel**
+- [ ] **FocusNode không dispose**
+  ```dart
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    _scrollController.dispose();
+    subscription?.cancel();
+    super.dispose();
+  }
+  ```
+
+### ✅ Security & Best Practices
+
+- [ ] **Không log sensitive data**
+  ```dart
+  // ❌ Sai
+  print('Login: $username, $password');
+
+  // ✅ Đúng
+  print('Login attempt for user: $username');
+  ```
+
+- [ ] **Hardcoded credentials** → Từ env/config
+
+### ✅ Import Issues
+
+- [ ] **Import đúng path**
+  ```dart
+  // ✅ Core barrel
+  import 'package:obm_gen_with_ai/core/';
+
+  // ✅ Constants
+  import 'package:obm_gen_with_ai/core/constants/color_app.dart';
+  import 'package:obm_gen_with_ai/core/constants/app_strings.dart';
+
+  // ✅ Components
+  import 'package:obm_gen_with_ai/core/components/core_button.dart';
+  ```
+
+---
+
+## Workflow Tự Động
+
+1. **Sau khi viết code xong** → Check checklist trên
+2. **Nếu có lỗi** → Tự động fix
+3. **Nếu cần confirm** → Hỏi user trước
+
+## Linter Tự Động
+
+Dự án có `analysis_options.yaml` — Flutter analyzer sẽ catch:
+- Unused imports
+- Unused variables
+- Type errors
+- Style violations
+
+Chạy manual check:
+```bash
+flutter analyze
+```
