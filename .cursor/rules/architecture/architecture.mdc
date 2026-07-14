@@ -134,9 +134,11 @@ MultiProvider (route / wrapper)
 ```
 
 **Quy tắc:**
-- **Loading cả page** → `{{CONSUMER_BASE}}` trong `buildRoot()` xử lý sẵn → body widget không cần wrapper gì.
-- **Loading từng thành phần** → dùng `SelectorBase`/`ConsumerBase` chỉ cho phần đó (ví dụ: nút Submit có loading riêng).
-- **Đọc provider** → `context.read<>()` hoặc `context.watch<>()` / `context.select<>()` trực tiếp trong body.
+- **Body widget là StatelessWidget thuần** — KHÔNG bọc `SelectorBase`/`ConsumerBase`/`ChangeNotifierProvider`.
+- `ConsumerBase` trong `buildRoot()` đã xử lý loading/error/noData cả page.
+- Đọc provider: `context.watch<>()` / `context.select<>()` (listen) hoặc `context.read<>()` (action/callback).
+- Callback/event handler: dùng `context.read<>()` — NEVER `.watch()`.
+- Chỉ bọc `SelectorBase`/`ConsumerBase` khi cần **loading/error riêng** cho từng thành phần.
 
 ## HTTP
 
@@ -148,6 +150,50 @@ MultiProvider (route / wrapper)
 | `{{LOADING_INTERCEPTOR}}` + `{{LOADING_HUB}}` | Global request counter |
 
 `{{DIO_CREATE}}` ships with: `LogInterceptor`, `QueuedInterceptorsWrapper` (auth header, response hook, 401 retry, error message parsing). Do NOT add duplicate interceptors.
+
+## Route Generator — append case vào `route_generator.dart`
+
+> **Nguồn:** `vnpt-workflow-stitch2flutter.mdc` lines 306-436
+
+### Trigger
+
+- Có `--postman` (feature có service + provider) → route cần `MultiProvider` + `ChangeNotifierProvider`
+- Không `--postman` → `const <Tên>Screen()` không bọc gì
+
+### Create vs Append
+
+1. **File chưa tồn tại** → tạo mới toàn bộ
+2. **File đã tồn tại** → append case MỚI, KHÔNG overwrite
+3. **Case đã tồn tại** → skip, không duplicate
+
+### Route pattern có `--postman`
+
+```dart
+case <tên>:
+  return MaterialPageRoute(
+    settings: settings,
+    builder: (_) => MultiProvider(
+      providers: [
+        ChangeNotifierProvider<<Tên>Provider>(
+          create: (_) => <Tên>Provider(
+            <Tên>Service(DioOption().createDio()),
+          ),
+        ),
+      ],
+      child: const <Tên>Screen(),
+    ),
+  );
+```
+
+### Route pattern KHÔNG có `--postman`
+
+```dart
+case <tên>:
+  return MaterialPageRoute(
+    settings: settings,
+    builder: (_) => const <Tên>Screen(),
+  );
+```
 
 ## Hard Rules
 
@@ -161,6 +207,7 @@ MultiProvider (route / wrapper)
 | 6 | KHÔNG call `showDialog`/`showToast` directly from widget | Must go through `provider.{{M_SHOW_DIALOG}}/{{M_SHOW_TOAST}}` (eventStream) |
 | 7 | KHÔNG wrap body with extra loading indicator | `{{CONSUMER_BASE}}` already shows/dismisses it |
 | 8 | KHÔNG instantiate `Dio()` directly | Always go through `{{DIO_CREATE}}` |
+| 9 | KHÔNG dùng barrel import `package:obm_gen_with_ai/core/` | Import trực tiếp từ sub-paths |
 
 ## Review Checklist
 

@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+.bmad-loop/runs/
+.bmad-loop/cache/
+.bmad-loop/policy.toml

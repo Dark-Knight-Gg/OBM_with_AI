@@ -18,6 +18,7 @@ alwaysApply: true
 | 4 | SVG via `SvgPicture.asset` directly    | `{{SVG_HELPER}}(...)`                |
 | 5 | Call `showDialog`/`showToast` from widget | `provider.{{M_SHOW_DIALOG}}/{{M_SHOW_TOAST}}` (via eventStream) |
 | 6 | Wrap body with extra loading overlay    | `{{CONSUMER_BASE}}` handles loading state  |
+| 7 | Use barrel import `package:obm_gen_with_ai/core/` (file does not exist) | Import directly from sub-paths |
 
 ## Colors — `ColorApp.*` (Semantic Tokens)
 
@@ -156,6 +157,154 @@ provider.{{M_SHOW_TOAST}}(
 - Key format: `{{I18N_KEY_STYLE}}` — NO `{{NO_LOCALE_KEYS}}` / `{{NO_PREFIX}}` convention.
 - When adding a new string: add to all 4 JSON files + a getter in `{{I18N_CLASS}}`.
 
+## i18n Extract-Check-Add Pipeline (Stitch Workflow)
+
+> **Nguồn:** `vnpt-workflow-stitch2flutter.mdc` — dùng khi generate code từ Stitch export.
+> Hand-written code: dùng pattern thông thường ở trên.
+
+### 5b.1 — Extract visible text từ HTML
+
+Extract tất cả visible text từ HTML (loại trừ: tags, attributes, URLs, IDs, numbers).
+
+### 5b.2 — Check 2 lớp trước khi tạo mới
+
+```python
+# Lớp 1: getter đã khai báo trong app_strings.dart
+app_strings = Read(path="lib/core/constants/app_strings.dart")
+existing_in_code = re.findall(r"static String get (\w+)", app_strings)
+
+# Lớp 2: key trong 4 file JSON
+existing_in_json = set()
+for lang in ['vi', 'vi-VN', 'en', 'en-US']:
+    json_data = ReadJson(f"lib/assets/translations/{lang}.json")
+    existing_in_json.update(json_data.keys())
+```
+
+### 5b.3 — Quyết định cho từng string
+
+```python
+def resolve_string_key(vi_text):
+    key = normalise_key(vi_text)
+    if key in existing_in_code:
+        return f"AppStrings.{key}", "reuse"         # ✅ đã có code
+    if key in existing_in_json:
+        return f"AppStrings.{key}", "add_getter"    # ⚠️ có JSON, thêm getter
+    return f"AppStrings.{key}", "create_new"        # 🆕 hoàn toàn mới
+
+def normalise_key(text):
+    return to_camel_case(remove_diacritics(text))
+```
+
+### 5b.4 — Thêm vào JSON + AppStrings (CHỉ khi `create_new` hoặc `add_getter`)
+
+```python
+for key, action in resolved_keys:
+    if action == "reuse": continue
+    # vi, vi-VN → giữ nguyên tiếng Việt
+    # en, en-US → dịch sang Anh
+    # Thêm getter: static String get {key} => '{key}'.tr();
+```
+
+### 5b.5 — Generated code
+
+```dart
+// ❌ hardcoded
+Text('Cơ hội kinh doanh')
+Text('Khách hàng')
+
+// ✅ AppStrings
+Text(AppStrings.coHoiKinhDoanh)
+Text(AppStrings.khachHang)
+```
+
+### 5b.6 — Reference map (thường gặp)
+
+| HTML text | Key |
+|-----------|-----|
+| Cơ hội kinh doanh | `coHoiKinhDoanh` |
+| Khách hàng | `khachHang` |
+| Tiến độ | `tienDo` |
+| Chỉnh sửa | `chinhSua` |
+| Xóa | `xoa` |
+| Lọc kết quả | `locKetQua` |
+| Làm mới | `lamMoi` |
+| Bộ lọc tìm kiếm | `boLocTimKiem` |
+| Trạng thái | `trangThai` |
+| Tất cả | `tatCa` |
+| Xác nhận | `xacNhan` |
+
+### 5b.7 — Provider strings (BẮT BUỘC)
+
+Mọi string trong provider phải dùng `AppStrings.*`. KHÔNG hardcoded string tiếng Việt trong provider.
+
+```dart
+// ❌ hardcoded
+emailError = 'Vui lòng nhập Email';
+showToast('Email hoặc mật khẩu không chính xác', type: ToastType.error);
+
+// ✅ AppStrings
+emailError = AppStrings.vuiLongNhapEmail;
+showToast(AppStrings.emailHoacMatKhauKhongChinhXac, type: ToastType.error);
+
+// ✅ API error — e.message OK, fallback AppStrings
+showToast(e.message ?? AppStrings.khongTheKetNoiMauChu, type: ToastType.error);
+// ✅ e.message từ server — OK
+// ✅ Fallback PHẢI là AppStrings.* — KHÔNG hardcoded
+```
+
+### 5b.8 — Khi nào GIỮ nguyên string (KHÔNG cần AppStrings)
+
+- String là key/object property: `'password'`, `'email'`
+- String là enum value
+- String là regex pattern
+- String là path/URL
+- String là numeric identifier
+
+```dart
+// ✅ GIỮ NGUYÊN — không phải display string
+final Map<String, dynamic> data = {'username': email, 'password': password};
+final result = await client.post('https://api.example.com/auth');
+enum ApiStatus { pending, approved, rejected }
+
+// ❌ CẦN AppStrings — display text
+emailError = AppStrings.vuiLongNhapEmail;
+```
+
+## Color Token — APPEND-ONLY (Stitch Workflow)
+
+> **Nguồn:** `vnpt-workflow-stitch2flutter.mdc`
+
+Khi append color tokens vào `lib/core/constants/color_app.dart`:
+
+- **CHỈ thêm token MỚI** (skip nếu tên đã có)
+- **KHÔNG sửa** phần nào khác của file
+- Vị trí: tìm dòng cuối cùng `static const Color` rồi insert sau
+
+```python
+existing = Read(path="lib/core/constants/color_app.dart")
+existing_names = re.findall(r'static const Color (\w+)', existing)
+
+new_tokens = []
+for css_name, hex in css_colors.items():
+    dart_name = css_to_dart_name(css_name)
+    if dart_name in existing_names:
+        continue  # SKIP — đã có
+    new_tokens.append(f'  static const Color {dart_name} = Color(0xFF{hex});')
+```
+
+## Stitch vs Hand-Written Code — Typography & Spacing
+
+> **Nguồn:** `vnpt-workflow-stitch2flutter.mdc` — phân biệt 2 ngữ cảnh.
+
+| Aspect | Stitch-generated code | Hand-written code |
+|--------|---------------------|-------------------|
+| Typography | `TextStyle(fontSize:, fontWeight:, height:)` inline từ CSS | `{{TEXT_STYLE_CLASS}}.*` |
+| Spacing | Inline từ CSS (`EdgeInsets.all(24)`) | Spacing scale (4 8 10 12 16 20 24 32 40 48) |
+| Radius | Inline từ CSS (`BorderRadius.circular(8)`) | `BorderRadius.circular(16)` theo quy tắc |
+
+- **Stitch export** → dùng giá trị từ CSS (preserve fidelity)
+- **Hand-written** → tuân thủ spacing scale + `{{TEXT_STYLE_CLASS}}.*`
+
 ## DO / DON'T
 
 | DO                                               | DON'T                                             |
@@ -171,9 +320,11 @@ provider.{{M_SHOW_TOAST}}(
 ## Review Checklist
 
 - [ ] No hex literals outside `ColorApp`.
-- [ ] No inline `TextStyle(...)` → use `{{TEXT_STYLE_CLASS}}.*`.
+- [ ] No inline `TextStyle(...)` → use `{{TEXT_STYLE_CLASS}}.*` (Stitch-generated = inline `TextStyle(...)` is OK).
 - [ ] All user-facing strings via `{{I18N_GETTER}}`.
 - [ ] `EdgeInsets`/`SizedBox` are `const`.
-- [ ] Padding/margin follow the spacing scale.
+- [ ] Padding/margin follow the spacing scale (Stitch-generated = inline from CSS is OK).
 - [ ] SVG loaded via `{{SVG_HELPER}}()`.
 - [ ] Dialog/Toast triggered from provider, not from widget.
+- [ ] No barrel import `package:obm_gen_with_ai/core/` → use direct sub-paths.
+- [ ] i18n: check 2 layers (AppStrings getter + JSON keys) before creating new key.

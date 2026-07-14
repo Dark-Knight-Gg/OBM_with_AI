@@ -114,6 +114,43 @@ class XxxResponse {
 }
 ```
 
+## API Error Message — `e.message ?? AppStrings.*`
+
+> **Nguồn:** `vnpt-workflow-stitch2flutter.mdc` line 604-609
+
+```dart
+// ✅ API trả về message từ server → dùng trực tiếp
+showToast(e.message ?? AppStrings.khongTheKetNoiMauChu, type: ToastType.error);
+// ✅ e.message là từ server — OK
+// ✅ Fallback PHẢI là AppStrings.* — KHÔNG hardcoded
+
+// ❌ Sai — fallback hardcoded
+showToast(e.message ?? 'Không thể kết nối', ...);  // ❌
+showToast(e.message ?? AppStrings.khongTheKetNoiMauChu, ...); // ✅
+```
+
+## Catch Order — DioException TRƯỚC generic Exception
+
+> **Nguồn:** `vnpt-workflow-stitch2flutter.mdc`
+
+```dart
+Future<void> fetchData() async {
+  try {
+    final res = await service.getItems();
+    items = res.data ?? const [];
+    items.isEmpty ? showNoData() : showLoaded();
+  } on DioException catch (e) {
+    // ✅ DioException TRƯỚC — message đã được parse bởi DioOption
+    errorMessage = e.message ?? AppStrings.warningNotConnectInternet;
+    showError();
+  } catch (e) {
+    // ✅ Generic Exception SAU
+    errorMessage = e.toString();
+    showError();
+  }
+}
+```
+
 ## Loading Counter
 
 `{{LOADING_INTERCEPTOR}}` (enabled by default in `DioOption`) calls `{{LOADING_HUB}}.inc()`/`dec()` on every request/response. To suppress per-call:

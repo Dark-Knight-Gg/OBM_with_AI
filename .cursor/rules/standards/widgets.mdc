@@ -91,6 +91,63 @@ File: `lib/core/components/image.dart`
 
 Always use `{{SVG_HELPER}}()` for local SVG. Never call `SvgPicture.asset` directly.
 
+## HTML → Flutter Widget Mapping (Stitch Workflow)
+
+> **Nguồn:** `vnpt-workflow-stitch2flutter.mdc` — mapping khi generate từ Stitch HTML export.
+
+### HTML Elements → Flutter Widgets
+
+| HTML/Tailwind class | Flutter widget |
+|---------------------|----------------|
+| `<main class="flex flex-col ...">` | `Column(...)` |
+| `<div class="bg-login-gradient">` | `Container(gradient: LinearGradient(...))` |
+| `<div class="card-shadow bg-white rounded-xl">` | `Container(boxShadow: [...], borderRadius: ...)` |
+| `<h1 class="text-headline-lg">` | `Text('...', style: TextStyle(fontSize: 30, fontWeight: w700))` |
+| `<form class="flex flex-col gap-stack-md">` | `Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...])` |
+| `<input class="rounded-lg border">` | `TextField(decoration: InputDecoration(border: ...))` |
+| `<button class="btn-gradient rounded-lg">` | `ElevatedButton(...)` |
+| `<span class="material-symbols-outlined">login</span>` | `Icon(Icons.login, size: 20)` |
+| `<div class="bg-[#D1E7DD] text-[#0f5132] rounded-lg">` | `Container(color: Color(0xFFD1E7DD), borderRadius: ...)` |
+
+### Material Symbols → Flutter Icons
+
+| Stitch (Material Symbols) | Flutter Material Icons |
+|--------------------------|----------------------|
+| `mail` | `Icons.mail_outline` |
+| `lock` | `Icons.lock_outline` |
+| `login` | `Icons.login` |
+| `check_circle` | `Icons.check_circle` |
+| `arrow_back` | `Icons.arrow_back` |
+| `search` | `Icons.search` |
+| `close` | `Icons.close` |
+| `add` | `Icons.add` |
+
+### Stitch Container Patterns
+
+```dart
+// Gradient
+Container(
+  decoration: BoxDecoration(
+    gradient: LinearGradient(
+      colors: [Color(0xFF0057E5), Color(0xFF003BB5)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+  ),
+)
+
+// Card with shadow
+Container(
+  decoration: BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(16),
+    boxShadow: const [
+      BoxShadow(color: Color(0x14000000), blurRadius: 8, offset: Offset(0, 4)),
+    ],
+  ),
+)
+```
+
 ## State Consumers
 
 ```dart
@@ -175,6 +232,40 @@ Create a new widget only when **all 3 conditions are met**:
 3. The widget has a **clear API** (props documented, no leaked external state).
 
 If used only once, keep it inline in the body widget.
+
+## Body Widget = StatelessWidget (NO ConsumerBase)
+
+> **Nguồn:** `vnpt-workflow-stitch2flutter.mdc` + `architecture.mdc`
+
+Body widget là **StatelessWidget thuần** — KHÔNG bọc `ConsumerBase`/`SelectorBase`/`ChangeNotifierProvider`.
+`ConsumerBase` trong `buildRoot()` của `{{SCREEN_BASE_CLASS}}` đã xử lý loading/error/noData cả page.
+
+```dart
+// ✅ ĐÚNG — StatelessWidget, dùng context.watch/read/select
+class BodyXxxWidget extends StatelessWidget {
+  const BodyXxxWidget({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = context.watch<XxxProvider>().items;
+    return ListView.builder(
+      itemCount: items.length,
+      itemBuilder: (_, i) => ItemWidget(item: items[i]),
+    );
+  }
+}
+
+// ❌ SAI — bọc ConsumerBase/SelectorBase trong body
+class BodyXxxWidget extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return SelectorBase<XxxProvider>(...);  // ❌ KHÔNG làm vậy
+  }
+}
+```
+
+**Khi nào dùng ConsumerBase/SelectorBase?**
+- Chỉ khi cần **loading/error riêng** cho từng thành phần (ví dụ: nút Submit có loading riêng).
 
 ## Review Checklist for New Widget in PR
 

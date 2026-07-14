@@ -96,7 +96,7 @@ priority: highest
 | `{{IMPORT_CONSTANTS}}` | `import 'package:obm_gen_with_ai/core/constants/'` | colors, strings |
 | `{{IMPORT_UTIL}}` | `import 'package:obm_gen_with_ai/core/utils/util.dart';` | util helpers |
 | `{{IMPORT_SERVICES}}` | `import 'package:obm_gen_with_ai/core/base/services/'` | base service files |
-| `{{IMPORT_CORE}}` | `import 'package:obm_gen_with_ai/core/'` | core umbrella |
+| `{{IMPORT_CORE}}` | `import 'package:obm_gen_with_ai/core/'` | ❌ BARREL — file không tồn tại. Luôn dùng sub-path trực tiếp. |
 
 ---
 
@@ -157,9 +157,9 @@ priority: highest
 | `{{CONSUMER_BASE}}` | `ConsumerBase<S, P>` | `core/base/selector_base.dart` | widgets.mdc, performance.mdc |
 | `{{SELECTOR_BASE}}` | `SelectorBase<P>` | `core/base/selector_base.dart` | widgets.mdc, performance.mdc |
 | `{{PROGRESS_LOAD}}` | `ProgressLoad` | `core/base/selector_base.dart` | widgets.mdc |
-| `{{EMPTY_WIDGET}}` | `EmptyListIndicator` | (needs verification) | widgets.mdc |
-| `{{ERROR_WIDGET}}` | `ErrorIndicator` | (needs verification) | widgets.mdc |
-| `{{NETWORK_IMAGE}}` | `AppNetworkImage` | (needs verification) | widgets.mdc |
+| `{{NETWORK_IMAGE}}` | `Image.network()` (built-in Flutter) | — | widgets.mdc |
+| `{{EMPTY_WIDGET}}` | — | Not found in codebase. Use inline empty state. | — |
+| `{{ERROR_WIDGET}}` | — | Not found in codebase. Use inline error state. | — |
 
 ---
 
